@@ -29,6 +29,7 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.core.task.AsyncTaskExecutor;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -72,6 +73,8 @@ import java.util.Optional;
 @Slf4j
 public class ChatJournalChatMemory implements ChatMemory {
 
+    private static final int MIN_RECOMMENDED_TOKENS = 500;
+
     private final ChatJournalEntryRepository repository;
     private final TokenUsageCalculator tokenUsageCalculator;
     private final ObjectMapper objectMapper;
@@ -86,8 +89,10 @@ public class ChatJournalChatMemory implements ChatMemory {
      * @param tokenUsageCalculator the calculator for estimating token counts
      * @param objectMapper the Jackson ObjectMapper for message serialization
      * @param summarizer the strategy for generating conversation summaries
-     * @param maxTokens the token threshold that triggers compaction
+     * @param maxTokens the token threshold that triggers compaction; must be positive
      * @param compactionExecutor the executor for running asynchronous compaction tasks
+     * @throws NullPointerException if any parameter is null
+     * @throws IllegalArgumentException if maxTokens is not positive
      */
     public ChatJournalChatMemory(ChatJournalEntryRepository repository,
                                  TokenUsageCalculator tokenUsageCalculator,
@@ -95,12 +100,19 @@ public class ChatJournalChatMemory implements ChatMemory {
                                  MessageSummarizer summarizer,
                                  int maxTokens,
                                  AsyncTaskExecutor compactionExecutor) {
-        this.repository = repository;
-        this.tokenUsageCalculator = tokenUsageCalculator;
-        this.objectMapper = objectMapper;
-        this.summarizer = summarizer;
+        this.repository = Objects.requireNonNull(repository, "repository must not be null");
+        this.tokenUsageCalculator = Objects.requireNonNull(tokenUsageCalculator, "tokenUsageCalculator must not be null");
+        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
+        this.summarizer = Objects.requireNonNull(summarizer, "summarizer must not be null");
+        this.compactionExecutor = Objects.requireNonNull(compactionExecutor, "compactionExecutor must not be null");
+        if (maxTokens <= 0) {
+            throw new IllegalArgumentException("maxTokens must be positive");
+        }
+        if (maxTokens < MIN_RECOMMENDED_TOKENS) {
+            log.warn("maxTokens ({}) is below the recommended minimum of {}; this may cause excessive compaction",
+                    maxTokens, MIN_RECOMMENDED_TOKENS);
+        }
         this.maxTokens = maxTokens;
-        this.compactionExecutor = compactionExecutor;
     }
 
     /**

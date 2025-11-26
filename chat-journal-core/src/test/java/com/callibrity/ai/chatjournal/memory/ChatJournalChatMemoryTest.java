@@ -36,10 +36,18 @@ import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.core.task.AsyncTaskExecutor;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -351,6 +359,137 @@ class ChatJournalChatMemoryTest {
             assertThat(response.id()).isEqualTo("abc-123");
             assertThat(response.name()).isEqualTo("weather");
             assertThat(response.responseData()).isEqualTo("Sunny, 72°F");
+        }
+    }
+
+    @Nested
+    class ConstructorValidation {
+
+        @Test
+        void shouldRejectNullRepository() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> new ChatJournalChatMemory(
+                            null,
+                            tokenUsageCalculator,
+                            new ObjectMapper(),
+                            summarizer,
+                            MAX_TOKENS,
+                            taskExecutor
+                    ))
+                    .withMessage("repository must not be null");
+        }
+
+        @Test
+        void shouldRejectNullTokenUsageCalculator() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> new ChatJournalChatMemory(
+                            repository,
+                            null,
+                            new ObjectMapper(),
+                            summarizer,
+                            MAX_TOKENS,
+                            taskExecutor
+                    ))
+                    .withMessage("tokenUsageCalculator must not be null");
+        }
+
+        @Test
+        void shouldRejectNullObjectMapper() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> new ChatJournalChatMemory(
+                            repository,
+                            tokenUsageCalculator,
+                            null,
+                            summarizer,
+                            MAX_TOKENS,
+                            taskExecutor
+                    ))
+                    .withMessage("objectMapper must not be null");
+        }
+
+        @Test
+        void shouldRejectNullSummarizer() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> new ChatJournalChatMemory(
+                            repository,
+                            tokenUsageCalculator,
+                            new ObjectMapper(),
+                            null,
+                            MAX_TOKENS,
+                            taskExecutor
+                    ))
+                    .withMessage("summarizer must not be null");
+        }
+
+        @Test
+        void shouldRejectNullCompactionExecutor() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> new ChatJournalChatMemory(
+                            repository,
+                            tokenUsageCalculator,
+                            new ObjectMapper(),
+                            summarizer,
+                            MAX_TOKENS,
+                            null
+                    ))
+                    .withMessage("compactionExecutor must not be null");
+        }
+
+        @Test
+        void shouldRejectZeroMaxTokens() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> new ChatJournalChatMemory(
+                            repository,
+                            tokenUsageCalculator,
+                            new ObjectMapper(),
+                            summarizer,
+                            0,
+                            taskExecutor
+                    ))
+                    .withMessage("maxTokens must be positive");
+        }
+
+        @Test
+        void shouldRejectNegativeMaxTokens() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> new ChatJournalChatMemory(
+                            repository,
+                            tokenUsageCalculator,
+                            new ObjectMapper(),
+                            summarizer,
+                            -100,
+                            taskExecutor
+                    ))
+                    .withMessage("maxTokens must be positive");
+        }
+
+        @Test
+        void shouldWarnWhenMaxTokensBelowRecommendedMinimum() {
+            Logger logger = (Logger) LoggerFactory.getLogger(ChatJournalChatMemory.class);
+            ListAppender<ILoggingEvent> listAppender = new ListAppender<>();
+            listAppender.start();
+            logger.addAppender(listAppender);
+
+            try {
+                new ChatJournalChatMemory(
+                        repository,
+                        tokenUsageCalculator,
+                        new ObjectMapper(),
+                        summarizer,
+                        100,
+                        taskExecutor
+                );
+
+                assertThat(listAppender.list)
+                        .filteredOn(event -> event.getLevel() == Level.WARN)
+                        .hasSize(1)
+                        .first()
+                        .extracting(ILoggingEvent::getFormattedMessage)
+                        .asString()
+                        .contains("maxTokens (100) is below the recommended minimum of 500");
+            } finally {
+                logger.detachAppender(listAppender);
+            }
         }
     }
 }
