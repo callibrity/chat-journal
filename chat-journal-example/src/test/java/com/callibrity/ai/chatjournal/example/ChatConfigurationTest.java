@@ -59,7 +59,8 @@ class ChatConfigurationTest {
 
         var result = config.fluxSseEventStream(taskExecutor);
 
-        assertThat(result).isNotNull();
-        assertThat(result).isInstanceOf(FluxSseEventStream.class);
+        assertThat(result)
+                .isNotNull()
+                .isInstanceOf(FluxSseEventStream.class);
     }
 }

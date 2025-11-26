@@ -193,7 +193,7 @@ class ChatJournalEntryTest {
 
             ChatJournalEntry entry = ChatJournalEntry.fromMessage(message, objectMapper, tokenUsageCalculator);
 
-            assertThat(entry.messageIndex()).isEqualTo(0);
+            assertThat(entry.messageIndex()).isZero();
             assertThat(entry.messageType()).isEqualTo(MessageType.USER.name());
             assertThat(entry.content()).isEqualTo("Hello");
             assertThat(entry.tokens()).isEqualTo(100);
