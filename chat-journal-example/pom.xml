@@ -32,6 +32,10 @@
     <name>Chat Journal Example</name>
     <description>Example Spring Boot application demonstrating chat-journal usage with OpenAI</description>
 
+    <properties>
+        <sonar.exclusions>src/main/java/**/ChatJournalExampleApplication.java</sonar.exclusions>
+    </properties>
+
     <dependencies>
         <!-- Spring Boot Web -->
         <dependency>
