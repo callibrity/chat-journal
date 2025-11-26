@@ -15,7 +15,6 @@
  */
 package com.callibrity.ai.chatjournal.token;
 
-import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.messages.Message;
 
 import java.util.List;
@@ -37,13 +36,25 @@ import static java.util.Optional.ofNullable;
  *
  * @see TokenUsageCalculator
  */
-@RequiredArgsConstructor
 public class SimpleTokenUsageCalculator implements TokenUsageCalculator {
 
     /**
      * The number of characters that approximates one token.
      */
     private final int charactersPerToken;
+
+    /**
+     * Creates a new SimpleTokenUsageCalculator with the specified characters-per-token ratio.
+     *
+     * @param charactersPerToken the number of characters per token; must be positive
+     * @throws IllegalArgumentException if charactersPerToken is not positive
+     */
+    public SimpleTokenUsageCalculator(int charactersPerToken) {
+        if (charactersPerToken <= 0) {
+            throw new IllegalArgumentException("charactersPerToken must be positive");
+        }
+        this.charactersPerToken = charactersPerToken;
+    }
 
     /**
      * Calculates the estimated token usage for a single message.

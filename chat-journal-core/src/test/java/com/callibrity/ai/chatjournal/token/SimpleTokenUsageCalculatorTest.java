@@ -24,6 +24,7 @@ import org.springframework.ai.chat.messages.UserMessage;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 class SimpleTokenUsageCalculatorTest {
 
@@ -102,5 +103,19 @@ class SimpleTokenUsageCalculatorTest {
         int tokens = calculator.calculateTokenUsage(List.of(message));
 
         assertThat(tokens).isZero();
+    }
+
+    @Test
+    void shouldRejectZeroCharactersPerToken() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new SimpleTokenUsageCalculator(0))
+                .withMessage("charactersPerToken must be positive");
+    }
+
+    @Test
+    void shouldRejectNegativeCharactersPerToken() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new SimpleTokenUsageCalculator(-1))
+                .withMessage("charactersPerToken must be positive");
     }
 }
