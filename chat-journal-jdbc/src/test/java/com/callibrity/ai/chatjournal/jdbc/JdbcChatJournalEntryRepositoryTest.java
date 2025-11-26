@@ -27,6 +27,8 @@ import org.springframework.test.context.jdbc.Sql;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 @JdbcTest
 @Sql("/schema-h2.sql")
@@ -288,6 +290,31 @@ class JdbcChatJournalEntryRepositoryTest {
 
             List<ChatJournalEntry> remainingEntries = repository.findAll(CONVERSATION_ID);
             assertThat(remainingEntries.get(0).messageIndex()).isEqualTo(firstMessageIndex);
+        }
+    }
+
+    @Nested
+    class ConstructorValidation {
+
+        @Test
+        void shouldRejectNullJdbcTemplate() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> new JdbcChatJournalEntryRepository(null, MIN_RETAINED_ENTRIES))
+                    .withMessage("jdbcTemplate must not be null");
+        }
+
+        @Test
+        void shouldRejectZeroMinRetainedEntries() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> new JdbcChatJournalEntryRepository(jdbcTemplate, 0))
+                    .withMessage("minRetainedEntries must be positive");
+        }
+
+        @Test
+        void shouldRejectNegativeMinRetainedEntries() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> new JdbcChatJournalEntryRepository(jdbcTemplate, -1))
+                    .withMessage("minRetainedEntries must be positive");
         }
     }
 }

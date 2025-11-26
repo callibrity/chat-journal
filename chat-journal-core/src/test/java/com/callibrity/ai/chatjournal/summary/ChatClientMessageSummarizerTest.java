@@ -28,6 +28,8 @@ import org.springframework.ai.chat.messages.UserMessage;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.verify;
@@ -101,5 +103,26 @@ class ChatClientMessageSummarizerTest {
         summarizer.summarize(List.of(new UserMessage("Test")));
 
         verify(requestSpec).user("Please provide a concise summary of the conversation above. Capture the key points, decisions, and any important context needed to continue.");
+    }
+
+    @Test
+    void shouldRejectNullChatClient() {
+        assertThatNullPointerException()
+                .isThrownBy(() -> new ChatClientMessageSummarizer(null))
+                .withMessage("chatClient must not be null");
+    }
+
+    @Test
+    void shouldRejectNullMessages() {
+        assertThatNullPointerException()
+                .isThrownBy(() -> summarizer.summarize(null))
+                .withMessage("messages must not be null");
+    }
+
+    @Test
+    void shouldRejectEmptyMessages() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> summarizer.summarize(List.of()))
+                .withMessage("messages must not be empty");
     }
 }

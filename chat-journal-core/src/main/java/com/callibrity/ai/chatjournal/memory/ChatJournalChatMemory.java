@@ -127,9 +127,15 @@ public class ChatJournalChatMemory implements ChatMemory {
      *
      * <p>After saving the messages, this method checks if the total token count exceeds
      * the configured maximum. If so, an asynchronous compaction task is scheduled.
+     *
+     * @throws NullPointerException if conversationId or messages is null
+     * @throws IllegalArgumentException if conversationId is empty
      */
     @Override
     public void add(String conversationId, List<Message> messages) {
+        validateConversationId(conversationId);
+        Objects.requireNonNull(messages, "messages must not be null");
+
         List<ChatJournalEntry> entries = messages.stream()
                 .map(msg -> ChatJournalEntry.fromMessage(msg, objectMapper, tokenUsageCalculator))
                 .toList();
@@ -148,9 +154,13 @@ public class ChatJournalChatMemory implements ChatMemory {
      *
      * <p>Returns all messages for the conversation, including any summary messages
      * that replaced older compacted entries.
+     *
+     * @throws NullPointerException if conversationId is null
+     * @throws IllegalArgumentException if conversationId is empty
      */
     @Override
     public List<Message> get(String conversationId) {
+        validateConversationId(conversationId);
         return repository.findAll(conversationId).stream()
                 .map(entry -> entry.toMessage(objectMapper))
                 .toList();
@@ -160,10 +170,21 @@ public class ChatJournalChatMemory implements ChatMemory {
      * {@inheritDoc}
      *
      * <p>Removes all entries for the conversation, including any summary messages.
+     *
+     * @throws NullPointerException if conversationId is null
+     * @throws IllegalArgumentException if conversationId is empty
      */
     @Override
     public void clear(String conversationId) {
+        validateConversationId(conversationId);
         repository.deleteAll(conversationId);
+    }
+
+    private static void validateConversationId(String conversationId) {
+        Objects.requireNonNull(conversationId, "conversationId must not be null");
+        if (conversationId.isEmpty()) {
+            throw new IllegalArgumentException("conversationId must not be empty");
+        }
     }
 
     private void performCompaction(String conversationId) {

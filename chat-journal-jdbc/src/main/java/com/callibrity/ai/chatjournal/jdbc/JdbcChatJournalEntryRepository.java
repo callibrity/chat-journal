@@ -21,14 +21,46 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 
+/**
+ * JDBC-based implementation of {@link ChatJournalEntryRepository}.
+ *
+ * <p>This implementation stores chat journal entries in a relational database using Spring's
+ * {@link JdbcTemplate}. It requires a table named {@code chat_journal} with the following schema:
+ *
+ * <pre>{@code
+ * CREATE TABLE chat_journal (
+ *     message_index BIGSERIAL PRIMARY KEY,
+ *     conversation_id VARCHAR(255) NOT NULL,
+ *     message_type VARCHAR(50) NOT NULL,
+ *     content TEXT NOT NULL,
+ *     tokens INTEGER NOT NULL
+ * );
+ * }</pre>
+ *
+ * <p>This class is thread-safe as it delegates all operations to the thread-safe JdbcTemplate.
+ *
+ * @see ChatJournalEntryRepository
+ */
 public class JdbcChatJournalEntryRepository implements ChatJournalEntryRepository {
 
     private final JdbcTemplate jdbcTemplate;
     private final int minRetainedEntries;
 
+    /**
+     * Creates a new JdbcChatJournalEntryRepository.
+     *
+     * @param jdbcTemplate the JdbcTemplate for database operations
+     * @param minRetainedEntries the minimum number of recent entries to retain during compaction; must be positive
+     * @throws NullPointerException if jdbcTemplate is null
+     * @throws IllegalArgumentException if minRetainedEntries is not positive
+     */
     public JdbcChatJournalEntryRepository(JdbcTemplate jdbcTemplate, int minRetainedEntries) {
-        this.jdbcTemplate = jdbcTemplate;
+        this.jdbcTemplate = Objects.requireNonNull(jdbcTemplate, "jdbcTemplate must not be null");
+        if (minRetainedEntries <= 0) {
+            throw new IllegalArgumentException("minRetainedEntries must be positive");
+        }
         this.minRetainedEntries = minRetainedEntries;
     }
 

@@ -491,4 +491,57 @@ class ChatJournalChatMemoryTest {
             }
         }
     }
+
+    @Nested
+    class MethodParameterValidation {
+
+        @Test
+        void addShouldRejectNullConversationId() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> chatMemory.add(null, List.of(new UserMessage("Hello"))))
+                    .withMessage("conversationId must not be null");
+        }
+
+        @Test
+        void addShouldRejectEmptyConversationId() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> chatMemory.add("", List.of(new UserMessage("Hello"))))
+                    .withMessage("conversationId must not be empty");
+        }
+
+        @Test
+        void addShouldRejectNullMessages() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> chatMemory.add(CONVERSATION_ID, (List<Message>) null))
+                    .withMessage("messages must not be null");
+        }
+
+        @Test
+        void getShouldRejectNullConversationId() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> chatMemory.get(null))
+                    .withMessage("conversationId must not be null");
+        }
+
+        @Test
+        void getShouldRejectEmptyConversationId() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> chatMemory.get(""))
+                    .withMessage("conversationId must not be empty");
+        }
+
+        @Test
+        void clearShouldRejectNullConversationId() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> chatMemory.clear(null))
+                    .withMessage("conversationId must not be null");
+        }
+
+        @Test
+        void clearShouldRejectEmptyConversationId() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> chatMemory.clear(""))
+                    .withMessage("conversationId must not be empty");
+        }
+    }
 }

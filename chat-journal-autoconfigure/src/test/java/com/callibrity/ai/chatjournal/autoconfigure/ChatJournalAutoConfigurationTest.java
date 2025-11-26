@@ -34,6 +34,7 @@ import org.springframework.context.annotation.Configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class ChatJournalAutoConfigurationTest {
 
@@ -148,7 +149,9 @@ class ChatJournalAutoConfigurationTest {
     static class ChatClientBuilderConfig {
         @Bean
         public ChatClient.Builder chatClientBuilder() {
-            return mock(ChatClient.Builder.class);
+            ChatClient.Builder builder = mock(ChatClient.Builder.class);
+            when(builder.build()).thenReturn(mock(ChatClient.class));
+            return builder;
         }
     }
 

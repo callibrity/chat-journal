@@ -29,6 +29,7 @@ import org.springframework.ai.chat.messages.UserMessage;
 
 import java.io.UncheckedIOException;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Immutable record representing a persisted chat message entry.
@@ -65,9 +66,13 @@ public record ChatJournalEntry(long messageIndex, String messageType, String con
      * @param objectMapper the Jackson ObjectMapper for serializing tool responses
      * @param tokenUsageCalculator the calculator for determining token count
      * @return a new ChatJournalEntry representing the message
+     * @throws NullPointerException if any parameter is null
      * @throws UncheckedIOException if tool response serialization fails
      */
     public static ChatJournalEntry fromMessage(Message message, ObjectMapper objectMapper, TokenUsageCalculator tokenUsageCalculator) {
+        Objects.requireNonNull(message, "message must not be null");
+        Objects.requireNonNull(objectMapper, "objectMapper must not be null");
+        Objects.requireNonNull(tokenUsageCalculator, "tokenUsageCalculator must not be null");
         String content = getContent(message, objectMapper);
         int tokens = tokenUsageCalculator.calculateTokenUsage(List.of(message));
         return new ChatJournalEntry(0, message.getMessageType().name(), content, tokens);

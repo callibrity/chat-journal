@@ -37,6 +37,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.lenient;
@@ -246,6 +247,29 @@ class ChatJournalEntryTest {
             assertThatThrownBy(() -> ChatJournalEntry.fromMessage(message, failingMapper, tokenUsageCalculator))
                     .isInstanceOf(UncheckedIOException.class)
                     .hasMessageContaining("Failed to serialize tool responses");
+        }
+
+        @Test
+        void shouldRejectNullMessage() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> ChatJournalEntry.fromMessage(null, objectMapper, tokenUsageCalculator))
+                    .withMessage("message must not be null");
+        }
+
+        @Test
+        void shouldRejectNullObjectMapper() {
+            UserMessage message = new UserMessage("Hello");
+            assertThatNullPointerException()
+                    .isThrownBy(() -> ChatJournalEntry.fromMessage(message, null, tokenUsageCalculator))
+                    .withMessage("objectMapper must not be null");
+        }
+
+        @Test
+        void shouldRejectNullTokenUsageCalculator() {
+            UserMessage message = new UserMessage("Hello");
+            assertThatNullPointerException()
+                    .isThrownBy(() -> ChatJournalEntry.fromMessage(message, objectMapper, null))
+                    .withMessage("tokenUsageCalculator must not be null");
         }
     }
 }

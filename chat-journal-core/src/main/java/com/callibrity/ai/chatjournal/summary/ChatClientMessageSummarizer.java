@@ -15,12 +15,12 @@
  */
 package com.callibrity.ai.chatjournal.summary;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.Message;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * A {@link MessageSummarizer} implementation that uses Spring AI's {@link ChatClient}
@@ -39,10 +39,19 @@ import java.util.List;
  * @see ChatClient
  */
 @Slf4j
-@RequiredArgsConstructor
 public class ChatClientMessageSummarizer implements MessageSummarizer {
 
     private final ChatClient chatClient;
+
+    /**
+     * Creates a new ChatClientMessageSummarizer.
+     *
+     * @param chatClient the ChatClient to use for generating summaries
+     * @throws NullPointerException if chatClient is null
+     */
+    public ChatClientMessageSummarizer(ChatClient chatClient) {
+        this.chatClient = Objects.requireNonNull(chatClient, "chatClient must not be null");
+    }
 
     /**
      * Summarizes the given messages using the configured ChatClient.
@@ -51,11 +60,17 @@ public class ChatClientMessageSummarizer implements MessageSummarizer {
      * summary that captures key points, decisions, and context needed to continue the
      * conversation.
      *
-     * @param messages the list of messages to summarize
+     * @param messages the list of messages to summarize; must not be null or empty
      * @return the LLM-generated summary of the conversation
+     * @throws NullPointerException if messages is null
+     * @throws IllegalArgumentException if messages is empty
      */
     @Override
     public String summarize(List<Message> messages) {
+        Objects.requireNonNull(messages, "messages must not be null");
+        if (messages.isEmpty()) {
+            throw new IllegalArgumentException("messages must not be empty");
+        }
         log.info("Summarizing {} messages", messages.size());
 
         return chatClient.prompt()
