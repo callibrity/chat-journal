@@ -63,7 +63,10 @@ import static java.util.Optional.ofNullable;
  *
  * @see Logger
  */
+@SuppressWarnings("java:S3457") // Concatenation is more performant than String.format for adding timing suffix
 public class StopwatchLogger {
+    private static final String ELAPSED_TIME_SUFFIX = " ({})";
+
     private final Logger logger;
 
     private final String format;
@@ -142,7 +145,7 @@ public class StopwatchLogger {
      */
     public void info(String pattern, Object... args) {
         if (logger.isInfoEnabled()) {
-            logger.info(pattern + " ({})", appendElapsed(args));
+            logger.info(pattern + ELAPSED_TIME_SUFFIX, appendElapsed(args));
         }
     }
 
@@ -154,7 +157,7 @@ public class StopwatchLogger {
      */
     public void debug(String pattern, Object... args) {
         if (logger.isDebugEnabled()) {
-            logger.debug(pattern + " ({})", appendElapsed(args));
+            logger.debug(pattern + ELAPSED_TIME_SUFFIX, appendElapsed(args));
         }
     }
 
@@ -166,7 +169,7 @@ public class StopwatchLogger {
      */
     public void warn(String pattern, Object... args) {
         if (logger.isWarnEnabled()) {
-            logger.warn(pattern + " ({})", appendElapsed(args));
+            logger.warn(pattern + ELAPSED_TIME_SUFFIX, appendElapsed(args));
         }
     }
 
@@ -178,7 +181,7 @@ public class StopwatchLogger {
      */
     public void error(String pattern, Object... args) {
         if (logger.isErrorEnabled()) {
-            logger.error(pattern + " ({})", appendElapsed(args));
+            logger.error(pattern + ELAPSED_TIME_SUFFIX, appendElapsed(args));
         }
     }
 
@@ -190,7 +193,7 @@ public class StopwatchLogger {
      */
     public void trace(String pattern, Object... args) {
         if (logger.isTraceEnabled()) {
-            logger.trace(pattern + " ({})", appendElapsed(args));
+            logger.trace(pattern + ELAPSED_TIME_SUFFIX, appendElapsed(args));
         }
     }
 
