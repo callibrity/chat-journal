@@ -43,7 +43,7 @@ public class ChatController {
 
     public ChatController(ChatClient.Builder chatClientBuilder, ChatMemory chatMemory) {
         this.chatClient = chatClientBuilder
-                .defaultAdvisors(new MessageChatMemoryAdvisor(chatMemory))
+                .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
                 .build();
     }
 
@@ -57,6 +57,55 @@ public class ChatController {
                 .call()
                 .content();
     }
+}
+```
+
+### Streaming with WebFlux
+
+If you're using Spring WebFlux, you can return a `Flux<String>` directly for SSE streaming:
+
+```java
+@GetMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+public Flux<String> stream(@RequestParam String question,
+                           @RequestParam(required = false) String conversationId) {
+    return chatClient.prompt()
+            .user(question)
+            .advisors(a -> a.param(ChatMemory.CONVERSATION_ID,
+                    conversationId != null ? conversationId : UUID.randomUUID().toString()))
+            .stream()
+            .content();
+}
+```
+
+### Streaming with WebMVC
+
+If you're using Spring WebMVC (servlet-based), use `SseEmitter` to stream the response:
+
+```java
+@GetMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+public SseEmitter stream(@RequestParam String question,
+                         @RequestParam(required = false) String conversationId) {
+    var emitter = new SseEmitter();
+
+    chatClient.prompt()
+            .user(question)
+            .advisors(a -> a.param(ChatMemory.CONVERSATION_ID,
+                    conversationId != null ? conversationId : UUID.randomUUID().toString()))
+            .stream()
+            .content()
+            .subscribe(
+                    chunk -> {
+                        try {
+                            emitter.send(chunk);
+                        } catch (IOException e) {
+                            emitter.completeWithError(e);
+                        }
+                    },
+                    emitter::completeWithError,
+                    emitter::complete
+            );
+
+    return emitter;
 }
 ```
 
