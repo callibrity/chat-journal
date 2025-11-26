@@ -1,26 +1,36 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Copyright © 2025 Callibrity, Inc. (contactus@callibrity.com)
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.5.8</version>
-        <relativePath/>
+        <groupId>com.callibrity.ai</groupId>
+        <artifactId>chat-journal-parent</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <groupId>com.callibrity.ai</groupId>
     <artifactId>chat-journal-example</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>Chat Journal Example</name>
     <description>Example Spring Boot application demonstrating chat-journal usage with OpenAI</description>
-
-    <properties>
-        <java.version>21</java.version>
-        <spring-ai.version>1.1.0</spring-ai.version>
-    </properties>
 
     <dependencies>
         <!-- Spring Boot Web -->
@@ -69,13 +79,6 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- Lombok -->
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <optional>true</optional>
-        </dependency>
-
         <!-- Test Dependencies -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -89,31 +92,12 @@
         </dependency>
     </dependencies>
 
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>org.springframework.ai</groupId>
-                <artifactId>spring-ai-bom</artifactId>
-                <version>${spring-ai.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
-
     <build>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <excludes>
-                        <exclude>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                        </exclude>
-                    </excludes>
-                </configuration>
+                <version>${spring-boot.version}</version>
             </plugin>
         </plugins>
     </build>
