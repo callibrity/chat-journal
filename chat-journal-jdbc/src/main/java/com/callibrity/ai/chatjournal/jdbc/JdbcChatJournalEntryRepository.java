@@ -78,12 +78,12 @@ public class JdbcChatJournalEntryRepository implements ChatJournalEntryRepositor
 
     @Override
     public int getTotalTokens(String conversationId) {
-        Integer total = jdbcTemplate.queryForObject(
+        //noinspection DataFlowIssue - COALESCE guarantees non-null result
+        return jdbcTemplate.queryForObject(
                 "SELECT COALESCE(SUM(tokens), 0) FROM chat_journal WHERE conversation_id = ?",
                 Integer.class,
                 conversationId
         );
-        return total != null ? total : 0;
     }
 
     @Override

@@ -28,15 +28,9 @@ public class FluxSseEventStream {
     private static final String DONE_EVENT = "done";
 
     private final AsyncTaskExecutor executor;
-    private final Function<SseEmitter, SseEventSender> senderFactory;
 
     public FluxSseEventStream(AsyncTaskExecutor executor) {
-        this(executor, SseEmitterEventSender::new);
-    }
-
-    public FluxSseEventStream(AsyncTaskExecutor executor, Function<SseEmitter, SseEventSender> senderFactory) {
         this.executor = executor;
-        this.senderFactory = senderFactory;
     }
 
     public <M> SseEmitter stream(M metadata, Flux<String> flux) {
@@ -45,14 +39,14 @@ public class FluxSseEventStream {
 
     public <M, T> SseEmitter stream(M metadata, Flux<T> flux, Function<T, Object> chunkMapper) {
         var emitter = new SseEmitter(0L);
-        var sender = senderFactory.apply(emitter);
+        var sender = new SseEmitterEventSender(emitter);
 
         executor.execute(() -> streamContent(sender, metadata, flux, chunkMapper));
 
         return emitter;
     }
 
-    <M, T> void streamContent(SseEventSender sender, M metadata, Flux<T> flux, Function<T, Object> chunkMapper) {
+    private <M, T> void streamContent(SseEventSender sender, M metadata, Flux<T> flux, Function<T, Object> chunkMapper) {
         if (!sender.send(METADATA_EVENT, metadata)) {
             return;
         }

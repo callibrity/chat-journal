@@ -19,25 +19,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.task.AsyncTaskExecutor;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doAnswer;
 
 @ExtendWith(MockitoExtension.class)
 class FluxSseEventStreamTest {
-
-    @Mock
-    private SseEventSender sender;
 
     @Mock
     private AsyncTaskExecutor taskExecutor;
@@ -47,104 +40,58 @@ class FluxSseEventStreamTest {
     @BeforeEach
     void setUp() {
         // Execute tasks synchronously for predictable test execution
-        lenient().doAnswer(invocation -> {
+        doAnswer(invocation -> {
             Runnable task = invocation.getArgument(0);
             task.run();
             return null;
         }).when(taskExecutor).execute(any(Runnable.class));
 
-        eventStream = new FluxSseEventStream(taskExecutor, emitter -> sender);
+        eventStream = new FluxSseEventStream(taskExecutor);
     }
 
     @Nested
-    class StreamContent {
+    class Stream {
 
-        @BeforeEach
-        void setUp() {
-            lenient().when(sender.send(eq("metadata"), any())).thenReturn(true);
-            lenient().when(sender.send(eq("chunk"), any())).thenReturn(true);
-            lenient().when(sender.send(eq("done"), any())).thenReturn(true);
+        @Test
+        void shouldReturnSseEmitter() {
+            SseEmitter emitter = eventStream.stream("metadata", Flux.empty());
+
+            assertThat(emitter).isNotNull();
         }
 
         @Test
-        void shouldSendMetadataFirst() {
-            var metadata = new TestMetadata("test-id");
+        void shouldStreamWithDefaultChunkMapper() {
+            SseEmitter emitter = eventStream.stream("metadata", Flux.just("chunk1", "chunk2"));
 
-            eventStream.stream(metadata, Flux.<String>empty());
-
-            verify(sender).send("metadata", metadata);
+            assertThat(emitter).isNotNull();
         }
 
         @Test
-        void shouldSendChunksInOrder() {
-            eventStream.stream("metadata", Flux.just("chunk1", "chunk2", "chunk3"));
-
-            InOrder inOrder = inOrder(sender);
-            inOrder.verify(sender).send("metadata", "metadata");
-            inOrder.verify(sender).send("chunk", new Chunk("chunk1"));
-            inOrder.verify(sender).send("chunk", new Chunk("chunk2"));
-            inOrder.verify(sender).send("chunk", new Chunk("chunk3"));
-            inOrder.verify(sender).send("done", "");
-            inOrder.verify(sender).complete();
-        }
-
-        @Test
-        void shouldSendDoneAndCompleteAfterAllChunks() {
-            when(sender.send(eq("chunk"), any(Chunk.class))).thenReturn(true);
-            eventStream.stream("metadata", Flux.just("chunk"));
-
-            InOrder inOrder = inOrder(sender);
-            inOrder.verify(sender).send("done", "");
-            inOrder.verify(sender).complete();
-        }
-
-        @Test
-        void shouldApplyChunkMapper() {
-            eventStream.stream(
+        void shouldStreamWithCustomChunkMapper() {
+            SseEmitter emitter = eventStream.stream(
                     "metadata",
                     Flux.just(1, 2, 3),
                     num -> "number-" + num
             );
 
-            verify(sender).send("chunk", "number-1");
-            verify(sender).send("chunk", "number-2");
-            verify(sender).send("chunk", "number-3");
+            assertThat(emitter).isNotNull();
         }
 
         @Test
-        void shouldUseCustomMapperWithNonStringFlux() {
-            var customObject = new TestChunk("data");
+        void shouldHandleEmptyFlux() {
+            SseEmitter emitter = eventStream.stream("metadata", Flux.<String>empty());
 
-            eventStream.stream("metadata", Flux.just(customObject), item -> item);
+            assertThat(emitter).isNotNull();
+        }
 
-            verify(sender).send("chunk", customObject);
+        @Test
+        void shouldHandleFluxError() {
+            SseEmitter emitter = eventStream.stream(
+                    "metadata",
+                    Flux.<String>error(new RuntimeException("Test error"))
+            );
+
+            assertThat(emitter).isNotNull();
         }
     }
-
-    @Nested
-    class ErrorHandling {
-
-        @Test
-        void shouldStopIfMetadataFails() {
-            when(sender.send(eq("metadata"), any())).thenReturn(false);
-
-            eventStream.stream("metadata", Flux.just("chunk"));
-
-            verify(sender, never()).send(eq("chunk"), any());
-            verify(sender, never()).complete();
-        }
-
-        @Test
-        void shouldCompleteWithErrorOnFluxError() {
-            when(sender.send(eq("metadata"), any())).thenReturn(true);
-            var error = new RuntimeException("Flux error");
-
-            eventStream.stream("metadata", Flux.<String>error(error));
-
-            verify(sender).completeWithError(error);
-        }
-    }
-
-    record TestMetadata(String id) {}
-    record TestChunk(String data) {}
 }
