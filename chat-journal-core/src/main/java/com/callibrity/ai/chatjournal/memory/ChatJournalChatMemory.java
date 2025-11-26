@@ -49,6 +49,13 @@ import java.util.Optional;
  * <p>This class is thread-safe. The repository and summarizer implementations must also
  * be thread-safe as they may be accessed concurrently during compaction.
  *
+ * <h2>Concurrency Limitations</h2>
+ * <p>In high-concurrency scenarios (especially multi-instance deployments), rapid message
+ * additions to the same conversation may trigger multiple concurrent compaction tasks.
+ * While data integrity is preserved through repository-level guards, this can result in
+ * redundant LLM summarization calls. Applications requiring stricter compaction coordination
+ * should implement database-level locking in their {@link ChatJournalEntryRepository}.
+ *
  * <h2>Usage Example</h2>
  * <pre>{@code
  * ChatJournalChatMemory memory = new ChatJournalChatMemory(
