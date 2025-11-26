@@ -18,7 +18,7 @@
     <description>Example Spring Boot application demonstrating chat-journal usage with OpenAI</description>
 
     <properties>
-        <java.version>25</java.version>
+        <java.version>21</java.version>
         <spring-ai.version>1.1.0</spring-ai.version>
     </properties>
 
