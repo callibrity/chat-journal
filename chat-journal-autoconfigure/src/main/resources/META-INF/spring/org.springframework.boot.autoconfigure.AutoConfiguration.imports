@@ -1,0 +1,3 @@
+com.callibrity.ai.chatjournal.autoconfigure.JTokkitAutoConfiguration
+com.callibrity.ai.chatjournal.autoconfigure.JdbcAutoConfiguration
+com.callibrity.ai.chatjournal.autoconfigure.ChatJournalAutoConfiguration

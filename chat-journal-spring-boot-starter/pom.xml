@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.callibrity.ai</groupId>
+        <artifactId>chat-journal-parent</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>chat-journal-spring-boot-starter</artifactId>
+    <name>Chat Journal Spring Boot Starter</name>
+    <description>Spring Boot starter for chat journal with JDBC storage and JTokkit token calculation</description>
+
+    <dependencies>
+        <!-- Auto-configuration -->
+        <dependency>
+            <groupId>com.callibrity.ai</groupId>
+            <artifactId>chat-journal-autoconfigure</artifactId>
+        </dependency>
+
+        <!-- JDBC storage (default) -->
+        <dependency>
+            <groupId>com.callibrity.ai</groupId>
+            <artifactId>chat-journal-jdbc</artifactId>
+        </dependency>
+
+        <!-- JTokkit token calculator (default) -->
+        <dependency>
+            <groupId>com.callibrity.ai</groupId>
+            <artifactId>chat-journal-jtokkit</artifactId>
+        </dependency>
+    </dependencies>
+</project>

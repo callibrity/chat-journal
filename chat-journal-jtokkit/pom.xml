@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.callibrity.ai</groupId>
+        <artifactId>chat-journal-parent</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>chat-journal-jtokkit</artifactId>
+    <name>Chat Journal JTokkit</name>
+    <description>JTokkit-based token usage calculator for chat journal</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.callibrity.ai</groupId>
+            <artifactId>chat-journal-core</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.knuddels</groupId>
+            <artifactId>jtokkit</artifactId>
+            <version>${jtokkit.version}</version>
+        </dependency>
+    </dependencies>
+</project>
