@@ -313,10 +313,11 @@ class ChatJournalChatMemoryTest {
             verify(repository).save(eq(CONVERSATION_ID), entriesCaptor.capture());
             String content = entriesCaptor.getValue().getFirst().content();
 
-            assertThat(content).contains("tool-1");
-            assertThat(content).contains("tool-2");
-            assertThat(content).contains("search");
-            assertThat(content).contains("calculator");
+            assertThat(content)
+                    .contains("tool-1")
+                    .contains("tool-2")
+                    .contains("search")
+                    .contains("calculator");
         }
 
         @Test
