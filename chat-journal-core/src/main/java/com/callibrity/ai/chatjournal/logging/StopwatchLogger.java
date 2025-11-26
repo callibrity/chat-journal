@@ -22,18 +22,24 @@ import org.slf4j.LoggerFactory;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 
-@Builder
+import static java.util.Optional.ofNullable;
+
+
 public class StopwatchLogger {
     private final Logger logger;
 
-    @Builder.Default
-    private final String format = "%.2f";
+    private final String format;
 
-    @Builder.Default
-    private final ChronoUnit unit = ChronoUnit.MILLIS;
+    private final ChronoUnit unit;
 
-    @Builder.Default
     private long startNanos = System.nanoTime();
+
+    @Builder
+    public StopwatchLogger(Logger logger, ChronoUnit unit, String format) {
+        this.logger = logger;
+        this.unit = ofNullable(unit).orElse(ChronoUnit.MILLIS);
+        this.format = ofNullable(format).orElse("%.2f");
+    }
 
     public static StopwatchLogger start(Logger logger) {
         return builder().logger(logger).build();
