@@ -66,6 +66,8 @@ public class JdbcChatJournalEntryRepository implements ChatJournalEntryRepositor
 
     @Override
     public void save(String conversationId, List<ChatJournalEntry> entries) {
+        validateConversationId(conversationId);
+        Objects.requireNonNull(entries, "entries must not be null");
         jdbcTemplate.batchUpdate(
                 "INSERT INTO chat_journal (conversation_id, message_type, content, tokens) VALUES (?, ?, ?, ?)",
                 entries,
@@ -81,6 +83,7 @@ public class JdbcChatJournalEntryRepository implements ChatJournalEntryRepositor
 
     @Override
     public List<ChatJournalEntry> findAll(String conversationId) {
+        validateConversationId(conversationId);
         return jdbcTemplate.query(
                 "SELECT message_index, message_type, content, tokens FROM chat_journal WHERE conversation_id = ? ORDER BY message_index",
                 (rs, rowNum) -> new ChatJournalEntry(
@@ -95,6 +98,7 @@ public class JdbcChatJournalEntryRepository implements ChatJournalEntryRepositor
 
     @Override
     public List<ChatJournalEntry> findEntriesForCompaction(String conversationId) {
+        validateConversationId(conversationId);
         return jdbcTemplate.query(
                 "SELECT message_index, message_type, content, tokens FROM chat_journal WHERE conversation_id = ? ORDER BY message_index DESC OFFSET ?",
                 (rs, rowNum) -> new ChatJournalEntry(
@@ -110,6 +114,7 @@ public class JdbcChatJournalEntryRepository implements ChatJournalEntryRepositor
 
     @Override
     public int getTotalTokens(String conversationId) {
+        validateConversationId(conversationId);
         //noinspection DataFlowIssue - COALESCE guarantees non-null result
         return jdbcTemplate.queryForObject(
                 "SELECT COALESCE(SUM(tokens), 0) FROM chat_journal WHERE conversation_id = ?",
@@ -120,12 +125,15 @@ public class JdbcChatJournalEntryRepository implements ChatJournalEntryRepositor
 
     @Override
     public void deleteAll(String conversationId) {
+        validateConversationId(conversationId);
         jdbcTemplate.update("DELETE FROM chat_journal WHERE conversation_id = ?", conversationId);
     }
 
     @Override
     @Transactional
     public void replaceEntriesWithSummary(String conversationId, ChatJournalEntry summaryEntry) {
+        validateConversationId(conversationId);
+        Objects.requireNonNull(summaryEntry, "summaryEntry must not be null");
         jdbcTemplate.update(
                 "DELETE FROM chat_journal WHERE conversation_id = ? AND message_index <= ?",
                 conversationId,
@@ -139,5 +147,12 @@ public class JdbcChatJournalEntryRepository implements ChatJournalEntryRepositor
                 summaryEntry.content(),
                 summaryEntry.tokens()
         );
+    }
+
+    private static void validateConversationId(String conversationId) {
+        Objects.requireNonNull(conversationId, "conversationId must not be null");
+        if (conversationId.isEmpty()) {
+            throw new IllegalArgumentException("conversationId must not be empty");
+        }
     }
 }

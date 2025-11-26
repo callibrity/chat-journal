@@ -317,4 +317,108 @@ class JdbcChatJournalEntryRepositoryTest {
                     .withMessage("minRetainedEntries must be positive");
         }
     }
+
+    @Nested
+    class MethodValidation {
+
+        @Test
+        void saveShouldRejectNullConversationId() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> repository.save(null, List.of()))
+                    .withMessage("conversationId must not be null");
+        }
+
+        @Test
+        void saveShouldRejectEmptyConversationId() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> repository.save("", List.of()))
+                    .withMessage("conversationId must not be empty");
+        }
+
+        @Test
+        void saveShouldRejectNullEntries() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> repository.save(CONVERSATION_ID, null))
+                    .withMessage("entries must not be null");
+        }
+
+        @Test
+        void findAllShouldRejectNullConversationId() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> repository.findAll(null))
+                    .withMessage("conversationId must not be null");
+        }
+
+        @Test
+        void findAllShouldRejectEmptyConversationId() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> repository.findAll(""))
+                    .withMessage("conversationId must not be empty");
+        }
+
+        @Test
+        void findEntriesForCompactionShouldRejectNullConversationId() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> repository.findEntriesForCompaction(null))
+                    .withMessage("conversationId must not be null");
+        }
+
+        @Test
+        void findEntriesForCompactionShouldRejectEmptyConversationId() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> repository.findEntriesForCompaction(""))
+                    .withMessage("conversationId must not be empty");
+        }
+
+        @Test
+        void getTotalTokensShouldRejectNullConversationId() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> repository.getTotalTokens(null))
+                    .withMessage("conversationId must not be null");
+        }
+
+        @Test
+        void getTotalTokensShouldRejectEmptyConversationId() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> repository.getTotalTokens(""))
+                    .withMessage("conversationId must not be empty");
+        }
+
+        @Test
+        void deleteAllShouldRejectNullConversationId() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> repository.deleteAll(null))
+                    .withMessage("conversationId must not be null");
+        }
+
+        @Test
+        void deleteAllShouldRejectEmptyConversationId() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> repository.deleteAll(""))
+                    .withMessage("conversationId must not be empty");
+        }
+
+        @Test
+        void replaceEntriesWithSummaryShouldRejectNullConversationId() {
+            ChatJournalEntry summaryEntry = new ChatJournalEntry(1, "SYSTEM", "Summary", 10);
+            assertThatNullPointerException()
+                    .isThrownBy(() -> repository.replaceEntriesWithSummary(null, summaryEntry))
+                    .withMessage("conversationId must not be null");
+        }
+
+        @Test
+        void replaceEntriesWithSummaryShouldRejectEmptyConversationId() {
+            ChatJournalEntry summaryEntry = new ChatJournalEntry(1, "SYSTEM", "Summary", 10);
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> repository.replaceEntriesWithSummary("", summaryEntry))
+                    .withMessage("conversationId must not be empty");
+        }
+
+        @Test
+        void replaceEntriesWithSummaryShouldRejectNullSummaryEntry() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> repository.replaceEntriesWithSummary(CONVERSATION_ID, null))
+                    .withMessage("summaryEntry must not be null");
+        }
+    }
 }

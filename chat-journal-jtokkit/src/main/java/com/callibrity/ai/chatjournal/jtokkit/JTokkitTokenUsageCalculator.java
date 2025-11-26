@@ -20,19 +20,23 @@ import com.knuddels.jtokkit.Encodings;
 import com.knuddels.jtokkit.api.Encoding;
 import com.knuddels.jtokkit.api.EncodingRegistry;
 import com.knuddels.jtokkit.api.EncodingType;
-import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.messages.Message;
 
 import java.util.List;
+import java.util.Objects;
 
 import static java.util.Optional.ofNullable;
 
-@RequiredArgsConstructor
 public class JTokkitTokenUsageCalculator implements TokenUsageCalculator {
 
     private final Encoding encoding;
 
+    public JTokkitTokenUsageCalculator(Encoding encoding) {
+        this.encoding = Objects.requireNonNull(encoding, "encoding must not be null");
+    }
+
     public JTokkitTokenUsageCalculator(EncodingType encodingType) {
+        Objects.requireNonNull(encodingType, "encodingType must not be null");
         EncodingRegistry registry = Encodings.newDefaultEncodingRegistry();
         this.encoding = registry.getEncoding(encodingType);
     }

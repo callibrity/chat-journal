@@ -16,29 +16,37 @@
 package com.callibrity.ai.chatjournal.autoconfigure;
 
 import com.knuddels.jtokkit.api.EncodingType;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
 @ConfigurationProperties(prefix = "chat.journal")
+@Validated
 public class ChatJournalProperties {
 
     /**
      * Maximum number of tokens before compaction is triggered.
      */
+    @Positive
     private int maxTokens = 8192;
 
     /**
      * Minimum number of entries to retain after compaction.
      */
+    @Positive
     private int minRetainedEntries = 6;
 
     /**
      * Characters per token for simple token calculator.
      */
+    @Positive
     private int charactersPerToken = 4;
 
     /**
      * Encoding type for JTokkit token calculator.
      */
+    @NotNull
     private EncodingType encodingType = EncodingType.O200K_BASE;
 
     public int getMaxTokens() {

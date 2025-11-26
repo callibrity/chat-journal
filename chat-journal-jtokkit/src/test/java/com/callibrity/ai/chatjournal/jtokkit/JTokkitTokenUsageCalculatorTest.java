@@ -30,6 +30,7 @@ import org.springframework.ai.chat.messages.UserMessage;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -128,6 +129,24 @@ class JTokkitTokenUsageCalculatorTest {
             int tokens = calculator.calculateTokenUsage(List.of(message));
 
             assertThat(tokens).isZero();
+        }
+    }
+
+    @Nested
+    class ConstructorValidation {
+
+        @Test
+        void shouldRejectNullEncoding() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> new JTokkitTokenUsageCalculator((Encoding) null))
+                    .withMessage("encoding must not be null");
+        }
+
+        @Test
+        void shouldRejectNullEncodingType() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> new JTokkitTokenUsageCalculator((EncodingType) null))
+                    .withMessage("encodingType must not be null");
         }
     }
 }
