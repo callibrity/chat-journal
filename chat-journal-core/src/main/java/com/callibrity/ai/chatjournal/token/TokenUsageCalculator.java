@@ -19,6 +19,25 @@ import org.springframework.ai.chat.messages.Message;
 
 import java.util.List;
 
+/**
+ * Strategy interface for calculating token usage of chat messages.
+ *
+ * <p>Token counting is essential for managing conversation memory within LLM context limits.
+ * Different implementations may use various strategies, from simple character-based estimation
+ * to accurate tokenizer-based counting (e.g., using JTokkit for OpenAI models).
+ *
+ * <p>Implementations should be thread-safe as they may be called concurrently from multiple
+ * conversations.
+ *
+ * @see com.callibrity.ai.chatjournal.memory.ChatJournalChatMemory
+ */
 public interface TokenUsageCalculator {
+
+    /**
+     * Calculates the total token usage for a list of messages.
+     *
+     * @param messages the list of messages to calculate tokens for; must not be null
+     * @return the total estimated or actual token count for all messages
+     */
     int calculateTokenUsage(List<Message> messages);
 }

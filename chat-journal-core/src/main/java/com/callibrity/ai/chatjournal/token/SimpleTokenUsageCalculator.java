@@ -22,11 +22,35 @@ import java.util.List;
 
 import static java.util.Optional.ofNullable;
 
+/**
+ * A simple token usage calculator that estimates tokens based on character count.
+ *
+ * <p>This implementation provides a fast, approximate token count by dividing the total
+ * character count by a configurable characters-per-token ratio. While not as accurate as
+ * tokenizer-based implementations (like JTokkit), it provides reasonable estimates for
+ * most use cases and has no external dependencies.
+ *
+ * <p>The default ratio of 4 characters per token is a reasonable approximation for English
+ * text with OpenAI models, but may need adjustment for other languages or models.
+ *
+ * <p>This class is thread-safe.
+ *
+ * @see TokenUsageCalculator
+ */
 @RequiredArgsConstructor
 public class SimpleTokenUsageCalculator implements TokenUsageCalculator {
 
+    /**
+     * The number of characters that approximates one token.
+     */
     private final int charactersPerToken;
 
+    /**
+     * Calculates the estimated token usage for a single message.
+     *
+     * @param message the message to calculate tokens for
+     * @return the estimated token count based on character length divided by charactersPerToken
+     */
     public int calculateTokenUsage(Message message) {
         return ofNullable(message.getText())
                 .map(String::length)

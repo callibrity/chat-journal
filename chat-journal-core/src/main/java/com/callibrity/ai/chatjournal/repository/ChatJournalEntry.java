@@ -30,10 +30,43 @@ import org.springframework.ai.chat.messages.UserMessage;
 import java.io.UncheckedIOException;
 import java.util.List;
 
+/**
+ * Immutable record representing a persisted chat message entry.
+ *
+ * <p>This record serves as the data transfer object between the chat memory system and the
+ * underlying storage. It captures all information needed to reconstruct a Spring AI
+ * {@link Message} while also tracking metadata for memory management.
+ *
+ * <p>Entries are serializable to various storage backends (JDBC, JPA, etc.) and support
+ * all Spring AI message types including tool response messages.
+ *
+ * @param messageIndex the ordinal position of this message within the conversation;
+ *                     used for ordering and identifying entries during compaction
+ * @param messageType the type of message (USER, ASSISTANT, SYSTEM, or TOOL);
+ *                    corresponds to Spring AI's {@link MessageType}
+ * @param content the message content; for tool response messages, this is JSON-serialized
+ * @param tokens the estimated or calculated token count for this message
+ * @see ChatJournalEntryRepository
+ * @see com.callibrity.ai.chatjournal.memory.ChatJournalChatMemory
+ */
 public record ChatJournalEntry(long messageIndex, String messageType, String content, int tokens) {
 
     private static final TypeReference<List<ToolResponse>> TOOL_RESPONSE_LIST_TYPE = new TypeReference<>() {};
 
+    /**
+     * Creates a ChatJournalEntry from a Spring AI Message.
+     *
+     * <p>This factory method extracts the message type and content, calculates token usage,
+     * and creates a new entry with message index 0 (to be assigned by the repository).
+     *
+     * <p>Tool response messages are serialized to JSON to preserve their structured content.
+     *
+     * @param message the Spring AI message to convert
+     * @param objectMapper the Jackson ObjectMapper for serializing tool responses
+     * @param tokenUsageCalculator the calculator for determining token count
+     * @return a new ChatJournalEntry representing the message
+     * @throws UncheckedIOException if tool response serialization fails
+     */
     public static ChatJournalEntry fromMessage(Message message, ObjectMapper objectMapper, TokenUsageCalculator tokenUsageCalculator) {
         String content = getContent(message, objectMapper);
         int tokens = tokenUsageCalculator.calculateTokenUsage(List.of(message));
@@ -51,6 +84,16 @@ public record ChatJournalEntry(long messageIndex, String messageType, String con
         return message.getText();
     }
 
+    /**
+     * Converts this entry back to a Spring AI Message.
+     *
+     * <p>Reconstructs the appropriate Message subtype based on the stored message type.
+     * Tool response messages are deserialized from their JSON representation.
+     *
+     * @param objectMapper the Jackson ObjectMapper for deserializing tool responses
+     * @return the reconstructed Spring AI Message
+     * @throws UncheckedIOException if tool response deserialization fails
+     */
     public Message toMessage(ObjectMapper objectMapper) {
         MessageType type = MessageType.valueOf(messageType);
         return switch (type) {

@@ -19,8 +19,31 @@ import org.springframework.ai.chat.messages.Message;
 
 import java.util.List;
 
+/**
+ * Strategy interface for summarizing conversation messages.
+ *
+ * <p>Message summarization is used during compaction to condense older conversation history
+ * into a shorter summary, freeing up token space while preserving context. This enables
+ * longer conversations within LLM context limits.
+ *
+ * <p>Implementations typically use an LLM to generate human-readable summaries that capture
+ * key points, decisions, and context from the conversation.
+ *
+ * <p>This is a functional interface to allow lambda implementations for simple use cases.
+ *
+ * @see com.callibrity.ai.chatjournal.memory.ChatJournalChatMemory
+ */
 @FunctionalInterface
 public interface MessageSummarizer {
 
+    /**
+     * Summarizes a list of messages into a concise text representation.
+     *
+     * <p>The summary should capture key points, decisions, and important context needed
+     * to continue the conversation meaningfully.
+     *
+     * @param messages the list of messages to summarize; must not be null or empty
+     * @return a concise summary of the conversation; never null
+     */
     String summarize(List<Message> messages);
 }

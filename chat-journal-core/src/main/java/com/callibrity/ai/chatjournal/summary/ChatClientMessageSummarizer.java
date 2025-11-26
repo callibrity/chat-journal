@@ -22,12 +22,38 @@ import org.springframework.ai.chat.messages.Message;
 
 import java.util.List;
 
+/**
+ * A {@link MessageSummarizer} implementation that uses Spring AI's {@link ChatClient}
+ * to generate conversation summaries.
+ *
+ * <p>This implementation sends the conversation history to an LLM with a prompt requesting
+ * a concise summary. The LLM generates a human-readable summary capturing key points,
+ * decisions, and context from the conversation.
+ *
+ * <p>The same ChatClient (and underlying model) used for the main conversation can be used
+ * for summarization, or a different, potentially cheaper model can be configured.
+ *
+ * <p>This class is thread-safe.
+ *
+ * @see MessageSummarizer
+ * @see ChatClient
+ */
 @Slf4j
 @RequiredArgsConstructor
 public class ChatClientMessageSummarizer implements MessageSummarizer {
 
     private final ChatClient chatClient;
 
+    /**
+     * Summarizes the given messages using the configured ChatClient.
+     *
+     * <p>The messages are sent to the LLM along with a user prompt requesting a concise
+     * summary that captures key points, decisions, and context needed to continue the
+     * conversation.
+     *
+     * @param messages the list of messages to summarize
+     * @return the LLM-generated summary of the conversation
+     */
     @Override
     public String summarize(List<Message> messages) {
         log.info("Summarizing {} messages", messages.size());

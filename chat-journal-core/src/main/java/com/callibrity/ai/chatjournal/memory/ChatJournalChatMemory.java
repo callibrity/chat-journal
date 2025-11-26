@@ -31,6 +31,44 @@ import org.springframework.core.task.AsyncTaskExecutor;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * A {@link ChatMemory} implementation that persists conversation history with automatic compaction.
+ *
+ * <p>This implementation stores chat messages in a pluggable repository and automatically
+ * compacts older messages into summaries when the conversation exceeds a configured token limit.
+ * This enables long-running conversations while staying within LLM context window constraints.
+ *
+ * <h2>Compaction Strategy</h2>
+ * <p>When the total token count exceeds {@code maxTokens}, older messages are summarized
+ * and replaced with a single system message containing the summary. Recent messages are
+ * preserved to maintain conversation continuity. Compaction runs asynchronously to avoid
+ * blocking the main conversation flow.
+ *
+ * <h2>Thread Safety</h2>
+ * <p>This class is thread-safe. The repository and summarizer implementations must also
+ * be thread-safe as they may be accessed concurrently during compaction.
+ *
+ * <h2>Usage Example</h2>
+ * <pre>{@code
+ * ChatJournalChatMemory memory = new ChatJournalChatMemory(
+ *     repository,
+ *     tokenCalculator,
+ *     objectMapper,
+ *     summarizer,
+ *     4000,  // maxTokens
+ *     taskExecutor
+ * );
+ *
+ * // Use with Spring AI ChatClient
+ * ChatClient client = ChatClient.builder(chatModel)
+ *     .defaultAdvisors(new MessageChatMemoryAdvisor(memory))
+ *     .build();
+ * }</pre>
+ *
+ * @see ChatMemory
+ * @see ChatJournalEntryRepository
+ * @see MessageSummarizer
+ */
 @Slf4j
 public class ChatJournalChatMemory implements ChatMemory {
 
@@ -41,6 +79,16 @@ public class ChatJournalChatMemory implements ChatMemory {
     private final int maxTokens;
     private final AsyncTaskExecutor compactionExecutor;
 
+    /**
+     * Creates a new ChatJournalChatMemory with the specified components.
+     *
+     * @param repository the repository for persisting chat entries
+     * @param tokenUsageCalculator the calculator for estimating token counts
+     * @param objectMapper the Jackson ObjectMapper for message serialization
+     * @param summarizer the strategy for generating conversation summaries
+     * @param maxTokens the token threshold that triggers compaction
+     * @param compactionExecutor the executor for running asynchronous compaction tasks
+     */
     public ChatJournalChatMemory(ChatJournalEntryRepository repository,
                                  TokenUsageCalculator tokenUsageCalculator,
                                  ObjectMapper objectMapper,
@@ -55,6 +103,12 @@ public class ChatJournalChatMemory implements ChatMemory {
         this.compactionExecutor = compactionExecutor;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>After saving the messages, this method checks if the total token count exceeds
+     * the configured maximum. If so, an asynchronous compaction task is scheduled.
+     */
     @Override
     public void add(String conversationId, List<Message> messages) {
         List<ChatJournalEntry> entries = messages.stream()
@@ -70,6 +124,12 @@ public class ChatJournalChatMemory implements ChatMemory {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Returns all messages for the conversation, including any summary messages
+     * that replaced older compacted entries.
+     */
     @Override
     public List<Message> get(String conversationId) {
         return repository.findAll(conversationId).stream()
@@ -77,6 +137,11 @@ public class ChatJournalChatMemory implements ChatMemory {
                 .toList();
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Removes all entries for the conversation, including any summary messages.
+     */
     @Override
     public void clear(String conversationId) {
         repository.deleteAll(conversationId);
