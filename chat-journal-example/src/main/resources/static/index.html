@@ -51,12 +51,12 @@
             padding: 0.75rem 1rem;
             border-radius: 1rem;
             line-height: 1.5;
-            white-space: pre-wrap;
             word-wrap: break-word;
             overflow-wrap: break-word;
         }
 
         .message.user {
+            white-space: pre-wrap;
             background-color: #2563eb;
             color: white;
             align-self: flex-end;
@@ -138,7 +138,86 @@
         .new-chat-btn:hover {
             text-decoration: underline;
         }
+
+        /* Markdown styling */
+        .message.assistant p {
+            margin: 0.5em 0;
+        }
+
+        .message.assistant p:first-child {
+            margin-top: 0;
+        }
+
+        .message.assistant p:last-child {
+            margin-bottom: 0;
+        }
+
+        .message.assistant code {
+            background-color: #f3f4f6;
+            padding: 0.125rem 0.25rem;
+            border-radius: 0.25rem;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 0.875em;
+        }
+
+        .message.assistant pre {
+            background-color: #1f2937;
+            color: #f9fafb;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin: 0.5em 0;
+        }
+
+        .message.assistant pre code {
+            background-color: transparent;
+            padding: 0;
+            color: inherit;
+        }
+
+        .message.assistant ul, .message.assistant ol {
+            margin: 0.5em 0;
+            padding-left: 1.5em;
+        }
+
+        .message.assistant li {
+            margin: 0.25em 0;
+        }
+
+        .message.assistant h1, .message.assistant h2, .message.assistant h3 {
+            margin: 0.75em 0 0.5em 0;
+            font-weight: 600;
+        }
+
+        .message.assistant h1:first-child,
+        .message.assistant h2:first-child,
+        .message.assistant h3:first-child {
+            margin-top: 0;
+        }
+
+        .message.assistant blockquote {
+            border-left: 3px solid #d1d5db;
+            padding-left: 0.75rem;
+            margin: 0.5em 0;
+            color: #6b7280;
+        }
+
+        .message.assistant table {
+            border-collapse: collapse;
+            margin: 0.5em 0;
+        }
+
+        .message.assistant th, .message.assistant td {
+            border: 1px solid #d1d5db;
+            padding: 0.5rem;
+        }
+
+        .message.assistant th {
+            background-color: #f3f4f6;
+        }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
 </head>
 <body>
     <div class="header">
@@ -165,17 +244,29 @@
     <script>
         let conversationId = null;
         let currentEventSource = null;
+        let currentRawContent = '';
 
         const chatContainer = document.getElementById('chatContainer');
         const questionInput = document.getElementById('questionInput');
         const sendButton = document.getElementById('sendButton');
         const statusText = document.getElementById('statusText');
 
+        // Configure marked for better rendering
+        marked.setOptions({
+            breaks: true,
+            gfm: true
+        });
+
         questionInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter' && !sendButton.disabled) {
                 sendMessage();
             }
         });
+
+        function renderMarkdown(text) {
+            const html = marked.parse(text);
+            return DOMPurify.sanitize(html);
+        }
 
         function sendMessage() {
             const question = questionInput.value.trim();
@@ -192,6 +283,7 @@
             // Create assistant message placeholder
             const assistantMessage = addMessage('', 'assistant');
             assistantMessage.classList.add('streaming');
+            currentRawContent = '';
 
             // Build URL
             let url = `/chat/stream?question=${encodeURIComponent(question)}`;
@@ -210,7 +302,8 @@
 
             currentEventSource.addEventListener('chunk', (e) => {
                 const chunk = JSON.parse(e.data);
-                assistantMessage.textContent += chunk.content;
+                currentRawContent += chunk.content;
+                assistantMessage.innerHTML = renderMarkdown(currentRawContent);
                 chatContainer.scrollTop = chatContainer.scrollHeight;
             });
 
@@ -223,8 +316,8 @@
 
             currentEventSource.onerror = (e) => {
                 assistantMessage.classList.remove('streaming');
-                if (!assistantMessage.textContent) {
-                    assistantMessage.textContent = 'Error: Could not get response. Check your OpenAI API key.';
+                if (!currentRawContent) {
+                    assistantMessage.innerHTML = renderMarkdown('**Error:** Could not get response. Check your OpenAI API key.');
                 }
                 setInputEnabled(true);
                 statusText.textContent = 'Error occurred';
@@ -238,7 +331,11 @@
         function addMessage(text, type) {
             const message = document.createElement('div');
             message.className = `message ${type}`;
-            message.textContent = text;
+            if (type === 'assistant' && text) {
+                message.innerHTML = renderMarkdown(text);
+            } else {
+                message.textContent = text;
+            }
             chatContainer.appendChild(message);
             chatContainer.scrollTop = chatContainer.scrollHeight;
             return message;
