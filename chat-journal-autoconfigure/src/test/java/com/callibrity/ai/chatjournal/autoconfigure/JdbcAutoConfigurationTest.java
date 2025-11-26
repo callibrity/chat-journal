@@ -73,10 +73,6 @@ class JdbcAutoConfigurationTest {
                 .withPropertyValues("chat.journal.min-retained-entries=10")
                 .run(context -> {
                     assertThat(context).hasSingleBean(ChatJournalEntryRepository.class);
-                    JdbcChatJournalEntryRepository repository =
-                            (JdbcChatJournalEntryRepository) context.getBean(ChatJournalEntryRepository.class);
-                    // The repository stores minRetainedEntries, but it's private
-                    // We can verify the bean was created with the property by checking the properties bean
                     ChatJournalProperties properties = context.getBean(ChatJournalProperties.class);
                     assertThat(properties.getMinRetainedEntries()).isEqualTo(10);
                 });
