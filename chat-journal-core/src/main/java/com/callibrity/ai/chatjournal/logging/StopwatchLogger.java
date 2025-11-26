@@ -32,6 +32,7 @@ public class StopwatchLogger {
     @Builder.Default
     private final ChronoUnit unit = ChronoUnit.MILLIS;
 
+    @Builder.Default
     private long startNanos = System.nanoTime();
 
     public static StopwatchLogger start(Logger logger) {
