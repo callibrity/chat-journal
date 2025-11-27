@@ -534,5 +534,41 @@ class ChatJournalChatMemoryTest {
                     .isThrownBy(() -> chatMemory.clear(""))
                     .withMessage("conversationId must not be empty");
         }
+
+        @Test
+        void getMemoryUsageShouldRejectNullConversationId() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> chatMemory.getMemoryUsage(null))
+                    .withMessage("conversationId must not be null");
+        }
+
+        @Test
+        void getMemoryUsageShouldRejectEmptyConversationId() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> chatMemory.getMemoryUsage(""))
+                    .withMessage("conversationId must not be empty");
+        }
+    }
+
+    @Nested
+    class GetMemoryUsage {
+
+        @Test
+        void shouldReturnCurrentTokensFromRepository() {
+            when(repository.getTotalTokens(CONVERSATION_ID)).thenReturn(500);
+
+            ChatMemoryUsage usage = chatMemory.getMemoryUsage(CONVERSATION_ID);
+
+            assertThat(usage.currentTokens()).isEqualTo(500);
+        }
+
+        @Test
+        void shouldReturnMaxTokensFromConfiguration() {
+            when(repository.getTotalTokens(CONVERSATION_ID)).thenReturn(500);
+
+            ChatMemoryUsage usage = chatMemory.getMemoryUsage(CONVERSATION_ID);
+
+            assertThat(usage.maxTokens()).isEqualTo(MAX_TOKENS);
+        }
     }
 }

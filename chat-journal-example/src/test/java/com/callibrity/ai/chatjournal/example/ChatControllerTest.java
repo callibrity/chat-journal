@@ -15,6 +15,8 @@
  */
 package com.callibrity.ai.chatjournal.example;
 
+import com.callibrity.ai.chatjournal.memory.ChatMemoryUsage;
+import com.callibrity.ai.chatjournal.memory.ChatMemoryUsageProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -56,6 +58,9 @@ class ChatControllerTest {
     @Mock
     private ChatClient.StreamResponseSpec streamResponseSpec;
 
+    @Mock
+    private ChatMemoryUsageProvider memoryUsageProvider;
+
     @Captor
     private ArgumentCaptor<String> userMessageCaptor;
 
@@ -68,7 +73,7 @@ class ChatControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new ChatController(chatClient, executor);
+        controller = new ChatController(chatClient, executor, memoryUsageProvider);
     }
 
     @Nested
@@ -81,6 +86,8 @@ class ChatControllerTest {
             when(userSpec.advisors(any(Consumer.class))).thenReturn(userSpec);
             when(userSpec.stream()).thenReturn(streamResponseSpec);
             when(streamResponseSpec.content()).thenReturn(Flux.just("Response"));
+            when(memoryUsageProvider.getMemoryUsage(anyString()))
+                    .thenReturn(new ChatMemoryUsage(500, 1000));
         }
 
         @Test
@@ -140,6 +147,18 @@ class ChatControllerTest {
         void shouldCreateChunkWithContent() {
             var chunk = new ChatController.Chunk("test content");
             assertThat(chunk.content()).isEqualTo("test content");
+        }
+    }
+
+    @Nested
+    class DoneRecord {
+
+        @Test
+        void shouldCreateDoneWithMemoryUsageStats() {
+            var done = new ChatController.Done(500, 1000, 50.0);
+            assertThat(done.currentTokens()).isEqualTo(500);
+            assertThat(done.maxTokens()).isEqualTo(1000);
+            assertThat(done.percentageUsed()).isEqualTo(50.0);
         }
     }
 }

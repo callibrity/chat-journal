@@ -78,7 +78,7 @@ import java.util.Optional;
  * @see MessageSummarizer
  */
 @Slf4j
-public class ChatJournalChatMemory implements ChatMemory {
+public class ChatJournalChatMemory implements ChatMemory, ChatMemoryUsageProvider {
 
     private static final int MIN_RECOMMENDED_TOKENS = 500;
 
@@ -178,6 +178,24 @@ public class ChatJournalChatMemory implements ChatMemory {
     public void clear(String conversationId) {
         validateConversationId(conversationId);
         repository.deleteAll(conversationId);
+    }
+
+    /**
+     * Returns the current memory usage statistics for a conversation.
+     *
+     * <p>This provides insight into how much of the configured memory budget is being
+     * used by conversation history, which can help clients understand when compaction
+     * might occur.
+     *
+     * @param conversationId the unique identifier for the conversation
+     * @return the memory usage statistics for the conversation
+     * @throws NullPointerException if conversationId is null
+     * @throws IllegalArgumentException if conversationId is empty
+     */
+    @Override
+    public ChatMemoryUsage getMemoryUsage(String conversationId) {
+        validateConversationId(conversationId);
+        return new ChatMemoryUsage(repository.getTotalTokens(conversationId), maxTokens);
     }
 
     private static void validateConversationId(String conversationId) {

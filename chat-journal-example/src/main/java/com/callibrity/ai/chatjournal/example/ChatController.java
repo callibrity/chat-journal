@@ -16,6 +16,8 @@
 package com.callibrity.ai.chatjournal.example;
 
 import com.callibrity.ai.chatjournal.example.sse.UncheckedSseEmitter;
+import com.callibrity.ai.chatjournal.memory.ChatMemoryUsage;
+import com.callibrity.ai.chatjournal.memory.ChatMemoryUsageProvider;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.core.task.TaskExecutor;
@@ -34,10 +36,12 @@ public class ChatController {
 
     private final ChatClient chatClient;
     private final TaskExecutor executor;
+    private final ChatMemoryUsageProvider memoryUsageProvider;
 
-    public ChatController(ChatClient chatClient, TaskExecutor executor) {
+    public ChatController(ChatClient chatClient, TaskExecutor executor, ChatMemoryUsageProvider memoryUsageProvider) {
         this.chatClient = chatClient;
         this.executor = executor;
+        this.memoryUsageProvider = memoryUsageProvider;
     }
 
     @GetMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -60,7 +64,8 @@ public class ChatController {
             for (var item : flux.toIterable()) {
                 emitter.send("chunk", new Chunk(item));
             }
-            emitter.send("done", "");
+            ChatMemoryUsage usage = memoryUsageProvider.getMemoryUsage(actualConversationId);
+            emitter.send("done", new Done(usage.currentTokens(), usage.maxTokens(), usage.percentageUsed()));
             emitter.complete();
         });
 
@@ -72,5 +77,8 @@ public class ChatController {
     }
 
     public record Metadata(String conversationId) {
+    }
+
+    public record Done(int currentTokens, int maxTokens, double percentageUsed) {
     }
 }

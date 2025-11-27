@@ -139,6 +139,34 @@
             text-decoration: underline;
         }
 
+        .memory-usage {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .memory-bar {
+            width: 100px;
+            height: 8px;
+            background-color: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .memory-bar-fill {
+            height: 100%;
+            background-color: #22c55e;
+            transition: width 0.3s ease, background-color 0.3s ease;
+        }
+
+        .memory-bar-fill.warning {
+            background-color: #eab308;
+        }
+
+        .memory-bar-fill.danger {
+            background-color: #ef4444;
+        }
+
         /* Markdown styling */
         .message.assistant p {
             margin: 0.5em 0;
@@ -238,6 +266,13 @@
 
     <div class="status-bar">
         <span id="statusText">Ready</span>
+        <div class="memory-usage" id="memoryUsage" style="display: none;">
+            <span>Memory:</span>
+            <div class="memory-bar">
+                <div class="memory-bar-fill" id="memoryBarFill"></div>
+            </div>
+            <span id="memoryText"></span>
+        </div>
         <button class="new-chat-btn" onclick="newChat()">New Chat</button>
     </div>
 
@@ -250,6 +285,9 @@
         const questionInput = document.getElementById('questionInput');
         const sendButton = document.getElementById('sendButton');
         const statusText = document.getElementById('statusText');
+        const memoryUsage = document.getElementById('memoryUsage');
+        const memoryBarFill = document.getElementById('memoryBarFill');
+        const memoryText = document.getElementById('memoryText');
 
         // Configure marked for better rendering
         marked.setOptions({
@@ -309,6 +347,8 @@
 
             currentEventSource.addEventListener('done', (e) => {
                 assistantMessage.classList.remove('streaming');
+                const doneData = JSON.parse(e.data);
+                updateMemoryUsage(doneData);
                 setInputEnabled(true);
                 currentEventSource.close();
                 currentEventSource = null;
@@ -349,6 +389,19 @@
             }
         }
 
+        function updateMemoryUsage(data) {
+            const percentage = data.percentageUsed;
+            memoryUsage.style.display = 'flex';
+            memoryBarFill.style.width = Math.min(percentage, 100) + '%';
+            memoryBarFill.classList.remove('warning', 'danger');
+            if (percentage >= 80) {
+                memoryBarFill.classList.add('danger');
+            } else if (percentage >= 50) {
+                memoryBarFill.classList.add('warning');
+            }
+            memoryText.textContent = `${data.currentTokens}/${data.maxTokens} (${percentage.toFixed(1)}%)`;
+        }
+
         function newChat() {
             if (currentEventSource) {
                 currentEventSource.close();
@@ -358,6 +411,7 @@
             chatContainer.innerHTML = '';
             addMessage("Hello! I'm powered by OpenAI. How can I help you today?", 'assistant');
             statusText.textContent = 'Ready';
+            memoryUsage.style.display = 'none';
             setInputEnabled(true);
         }
     </script>
