@@ -15,6 +15,7 @@
  */
 package com.callibrity.ai.chatjournal.example.sse;
 
+import lombok.Getter;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
@@ -36,22 +37,33 @@ import java.io.UncheckedIOException;
  * @see SseEmitter
  * @see UncheckedIOException
  */
+@Getter
 public class UncheckedSseEmitter {
 
-    private final SseEmitter emitter;
+// ------------------------------ FIELDS ------------------------------
 
-    private UncheckedSseEmitter(SseEmitter emitter) {
-        this.emitter = emitter;
-    }
+    private final SseEmitter nested;
+
+// --------------------------- CONSTRUCTORS ---------------------------
 
     /**
-     * Creates an {@code UncheckedSseEmitter} wrapping the given {@link SseEmitter}.
+     * Creates a new {@code UncheckedSseEmitter} that wraps the given {@link SseEmitter}.
      *
-     * @param emitter the SSE emitter to wrap
-     * @return a new {@code UncheckedSseEmitter} instance
+     * @param nested the SseEmitter to wrap
      */
-    public static UncheckedSseEmitter of(SseEmitter emitter) {
-        return new UncheckedSseEmitter(emitter);
+    public UncheckedSseEmitter(SseEmitter nested) {
+        this.nested = nested;
+    }
+
+    // -------------------------- OTHER METHODS --------------------------
+
+    /**
+     * Completes the SSE emitter normally.
+     *
+     * <p>This signals to the client that no more events will be sent.
+     */
+    public void complete() {
+        nested.complete();
     }
 
     /**
@@ -62,24 +74,16 @@ public class UncheckedSseEmitter {
      * an {@link UncheckedIOException}.
      *
      * @param eventName the name of the SSE event
-     * @param data the data payload for the event
+     * @param data      the data payload for the event
      * @throws UncheckedIOException if an I/O error occurs while sending
      */
     public void send(String eventName, Object data) {
         try {
-            emitter.send(SseEmitter.event().name(eventName).data(data));
+            nested.send(SseEmitter.event().name(eventName).data(data));
         } catch (IOException e) {
-            emitter.completeWithError(e);
+            nested.completeWithError(e);
             throw new UncheckedIOException(e);
         }
     }
 
-    /**
-     * Completes the SSE emitter normally.
-     *
-     * <p>This signals to the client that no more events will be sent.
-     */
-    public void complete() {
-        emitter.complete();
-    }
 }

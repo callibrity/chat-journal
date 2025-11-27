@@ -53,18 +53,18 @@ public class ChatController {
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, actualConversationId))
                 .stream()
                 .content();
+        var emitter = new UncheckedSseEmitter(new SseEmitter(0L));
 
-        var emitter = new SseEmitter(0L); // No timeout
-        var uncheckedEmitter = UncheckedSseEmitter.of(emitter);
         executor.execute(() -> {
-            uncheckedEmitter.send("metadata", new Metadata(actualConversationId));
+            emitter.send("metadata", new Metadata(actualConversationId));
             for (var item : flux.toIterable()) {
-                uncheckedEmitter.send("chunk", new Chunk(item));
+                emitter.send("chunk", new Chunk(item));
             }
-            uncheckedEmitter.send("done", "");
-            uncheckedEmitter.complete();
+            emitter.send("done", "");
+            emitter.complete();
         });
-        return emitter;
+
+        return emitter.getNested();
     }
 
     public record Chunk(String content) {

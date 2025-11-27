@@ -16,6 +16,7 @@
 package com.callibrity.ai.chatjournal.example.sse;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -31,38 +32,68 @@ import static org.mockito.Mockito.verify;
 
 class UncheckedSseEmitterTest {
 
-    private SseEmitter emitter;
-    private UncheckedSseEmitter uncheckedEmitter;
+    @Nested
+    class Constructor {
 
-    @BeforeEach
-    void setUp() {
-        emitter = mock(SseEmitter.class);
-        uncheckedEmitter = UncheckedSseEmitter.of(emitter);
+        @Test
+        void shouldWrapProvidedEmitter() {
+            var nested = new SseEmitter();
+
+            var uncheckedEmitter = new UncheckedSseEmitter(nested);
+
+            assertThat(uncheckedEmitter.getNested()).isSameAs(nested);
+        }
     }
 
-    @Test
-    void shouldDelegateToEmitterOnSend() throws IOException {
-        uncheckedEmitter.send("event", "data");
+    @Nested
+    class Send {
 
-        verify(emitter).send(any(SseEmitter.SseEventBuilder.class));
+        private SseEmitter nested;
+        private UncheckedSseEmitter uncheckedEmitter;
+
+        @BeforeEach
+        void setUp() {
+            nested = mock(SseEmitter.class);
+            uncheckedEmitter = new UncheckedSseEmitter(nested);
+        }
+
+        @Test
+        void shouldDelegateToNestedEmitter() throws IOException {
+            uncheckedEmitter.send("event", "data");
+
+            verify(nested).send(any(SseEmitter.SseEventBuilder.class));
+        }
+
+        @Test
+        void shouldCompleteWithErrorAndThrowUncheckedIOExceptionOnIOException() throws IOException {
+            var ioException = new IOException("Connection lost");
+            doThrow(ioException).when(nested).send(any(SseEmitter.SseEventBuilder.class));
+
+            assertThatThrownBy(() -> uncheckedEmitter.send("event", "data"))
+                    .isInstanceOf(UncheckedIOException.class)
+                    .hasCause(ioException);
+
+            verify(nested).completeWithError(ioException);
+        }
     }
 
-    @Test
-    void shouldCompleteWithErrorAndThrowUncheckedIOExceptionOnIOException() throws IOException {
-        var ioException = new IOException("Connection lost");
-        doThrow(ioException).when(emitter).send(any(SseEmitter.SseEventBuilder.class));
+    @Nested
+    class Complete {
 
-        assertThatThrownBy(() -> uncheckedEmitter.send("event", "data"))
-                .isInstanceOf(UncheckedIOException.class)
-                .hasCause(ioException);
+        private SseEmitter nested;
+        private UncheckedSseEmitter uncheckedEmitter;
 
-        verify(emitter).completeWithError(ioException);
-    }
+        @BeforeEach
+        void setUp() {
+            nested = mock(SseEmitter.class);
+            uncheckedEmitter = new UncheckedSseEmitter(nested);
+        }
 
-    @Test
-    void shouldDelegateComplete() {
-        uncheckedEmitter.complete();
+        @Test
+        void shouldDelegateToNestedEmitter() {
+            uncheckedEmitter.complete();
 
-        verify(emitter).complete();
+            verify(nested).complete();
+        }
     }
 }
