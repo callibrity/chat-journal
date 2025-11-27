@@ -18,6 +18,7 @@ Chat Journal is a Spring Boot starter for chat memory management with automatic 
 - **Persistent Chat Memory**: Store conversation history in a database using JDBC
 - **Automatic Compaction**: Intelligently summarize older messages when token limits are exceeded
 - **Token Counting**: Accurate token counting using JTokkit (supports OpenAI tokenizers)
+- **Memory Usage Monitoring**: Query token usage statistics to display memory budget consumption
 - **Spring Boot Auto-Configuration**: Zero-config setup with sensible defaults
 - **Multi-Database Support**: Schema files for PostgreSQL, MySQL, MariaDB, Oracle, SQL Server, and H2
 
@@ -132,6 +133,53 @@ Chat Journal uses [JTokkit](https://github.com/knuddelsgmbh/jtokkit) for token c
 - `CL100K_BASE` - Used by GPT-4 and GPT-3.5-turbo
 - `P50K_BASE` - Used by older GPT-3 models
 - `R50K_BASE` - Used by older GPT-3 models
+
+## Memory Usage Monitoring
+
+Chat Journal provides an API to monitor memory usage for conversations, allowing you to display how much of the token budget is being used before compaction occurs.
+
+### Using ChatMemoryUsageProvider
+
+Inject `ChatMemoryUsageProvider` to query memory usage statistics:
+
+```java
+@RestController
+public class ChatController {
+
+    private final ChatMemoryUsageProvider memoryUsageProvider;
+
+    public ChatController(ChatMemoryUsageProvider memoryUsageProvider) {
+        this.memoryUsageProvider = memoryUsageProvider;
+    }
+
+    @GetMapping("/memory-usage")
+    public ChatMemoryUsage getMemoryUsage(@RequestParam String conversationId) {
+        return memoryUsageProvider.getMemoryUsage(conversationId);
+    }
+}
+```
+
+### ChatMemoryUsage Record
+
+The `ChatMemoryUsage` record provides:
+
+| Method | Description |
+|--------|-------------|
+| `currentTokens()` | Number of tokens currently used by conversation history |
+| `maxTokens()` | Maximum tokens allowed before compaction is triggered |
+| `percentageUsed()` | Percentage of budget used (0.0 to 100.0+, may exceed 100 if over budget) |
+| `tokensRemaining()` | Tokens remaining before reaching the maximum (0 if at or over limit) |
+
+Example response:
+
+```json
+{
+  "currentTokens": 4096,
+  "maxTokens": 8192,
+  "percentageUsed": 50.0,
+  "tokensRemaining": 4096
+}
+```
 
 ## Database Setup
 
