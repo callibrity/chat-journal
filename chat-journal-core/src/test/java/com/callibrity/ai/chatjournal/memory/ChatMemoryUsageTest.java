@@ -30,7 +30,7 @@ class ChatMemoryUsageTest {
         void shouldReturnZeroWhenNoTokensUsed() {
             var usage = new ChatMemoryUsage(0, 1000);
 
-            assertThat(usage.percentageUsed()).isEqualTo(0.0);
+            assertThat(usage.percentageUsed()).isZero();
         }
 
         @Test
@@ -58,7 +58,7 @@ class ChatMemoryUsageTest {
         void shouldReturnZeroWhenMaxTokensIsZero() {
             var usage = new ChatMemoryUsage(500, 0);
 
-            assertThat(usage.percentageUsed()).isEqualTo(0.0);
+            assertThat(usage.percentageUsed()).isZero();
         }
     }
 
@@ -83,14 +83,14 @@ class ChatMemoryUsageTest {
         void shouldReturnZeroWhenFullyUsed() {
             var usage = new ChatMemoryUsage(1000, 1000);
 
-            assertThat(usage.tokensRemaining()).isEqualTo(0);
+            assertThat(usage.tokensRemaining()).isZero();
         }
 
         @Test
         void shouldReturnZeroWhenOverBudget() {
             var usage = new ChatMemoryUsage(1500, 1000);
 
-            assertThat(usage.tokensRemaining()).isEqualTo(0);
+            assertThat(usage.tokensRemaining()).isZero();
         }
     }
 }
