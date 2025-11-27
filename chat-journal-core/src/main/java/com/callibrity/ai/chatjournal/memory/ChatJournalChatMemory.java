@@ -26,7 +26,7 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.MessageType;
 import org.springframework.ai.chat.messages.SystemMessage;
-import org.springframework.core.task.AsyncTaskExecutor;
+import org.springframework.core.task.TaskExecutor;
 
 import java.util.List;
 import java.util.Objects;
@@ -87,7 +87,7 @@ public class ChatJournalChatMemory implements ChatMemory {
     private final ObjectMapper objectMapper;
     private final MessageSummarizer summarizer;
     private final int maxTokens;
-    private final AsyncTaskExecutor compactionExecutor;
+    private final TaskExecutor compactionExecutor;
 
     /**
      * Creates a new ChatJournalChatMemory with the specified components.
@@ -106,7 +106,7 @@ public class ChatJournalChatMemory implements ChatMemory {
                                  ObjectMapper objectMapper,
                                  MessageSummarizer summarizer,
                                  int maxTokens,
-                                 AsyncTaskExecutor compactionExecutor) {
+                                 TaskExecutor compactionExecutor) {
         this.repository = Objects.requireNonNull(repository, "repository must not be null");
         this.tokenUsageCalculator = Objects.requireNonNull(tokenUsageCalculator, "tokenUsageCalculator must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
@@ -145,7 +145,7 @@ public class ChatJournalChatMemory implements ChatMemory {
         if (totalTokens > maxTokens) {
             log.info("Scheduling compaction for conversation {}: {} tokens exceeds max of {}",
                     conversationId, totalTokens, maxTokens);
-            compactionExecutor.submit(() -> performCompaction(conversationId));
+            compactionExecutor.execute(() -> performCompaction(conversationId));
         }
     }
 

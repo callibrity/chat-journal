@@ -20,54 +20,49 @@ import org.junit.jupiter.api.Test;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-class SseEmitterEventSenderTest {
+class UncheckedSseEmitterTest {
 
     private SseEmitter emitter;
-    private SseEmitterEventSender sender;
+    private UncheckedSseEmitter uncheckedEmitter;
 
     @BeforeEach
     void setUp() {
         emitter = mock(SseEmitter.class);
-        sender = new SseEmitterEventSender(emitter);
+        uncheckedEmitter = UncheckedSseEmitter.of(emitter);
     }
 
     @Test
-    void shouldReturnTrueOnSuccessfulSend() {
-        boolean result = sender.send("event", "data");
+    void shouldDelegateToEmitterOnSend() throws IOException {
+        uncheckedEmitter.send("event", "data");
 
-        assertThat(result).isTrue();
+        verify(emitter).send(any(SseEmitter.SseEventBuilder.class));
     }
 
     @Test
-    void shouldReturnFalseAndCompleteWithErrorOnIOException() throws IOException {
-        doThrow(new IOException("Connection lost")).when(emitter).send(any(SseEmitter.SseEventBuilder.class));
+    void shouldCompleteWithErrorAndThrowUncheckedIOExceptionOnIOException() throws IOException {
+        var ioException = new IOException("Connection lost");
+        doThrow(ioException).when(emitter).send(any(SseEmitter.SseEventBuilder.class));
 
-        boolean result = sender.send("event", "data");
+        assertThatThrownBy(() -> uncheckedEmitter.send("event", "data"))
+                .isInstanceOf(UncheckedIOException.class)
+                .hasCause(ioException);
 
-        assertThat(result).isFalse();
-        verify(emitter).completeWithError(any(IOException.class));
+        verify(emitter).completeWithError(ioException);
     }
 
     @Test
     void shouldDelegateComplete() {
-        sender.complete();
+        uncheckedEmitter.complete();
 
         verify(emitter).complete();
-    }
-
-    @Test
-    void shouldDelegateCompleteWithError() {
-        var error = new RuntimeException("Test error");
-
-        sender.completeWithError(error);
-
-        verify(emitter).completeWithError(error);
     }
 }

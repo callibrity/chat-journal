@@ -35,7 +35,8 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse;
 import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.core.task.AsyncTaskExecutor;
+import org.springframework.core.task.SyncTaskExecutor;
+import org.springframework.core.task.TaskExecutor;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -51,7 +52,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -71,8 +71,7 @@ class ChatJournalChatMemoryTest {
     @Mock
     private MessageSummarizer summarizer;
 
-    @Mock
-    private AsyncTaskExecutor taskExecutor;
+    private final TaskExecutor taskExecutor = new SyncTaskExecutor();
 
     @Captor
     private ArgumentCaptor<List<ChatJournalEntry>> entriesCaptor;
@@ -84,14 +83,6 @@ class ChatJournalChatMemoryTest {
 
     @BeforeEach
     void setUp() {
-        // Configure mock executor to run tasks synchronously for predictable test behavior
-        // Lenient because not all tests trigger compaction
-        lenient().doAnswer(invocation -> {
-            Runnable task = invocation.getArgument(0);
-            task.run();
-            return null;
-        }).when(taskExecutor).submit(any(Runnable.class));
-
         chatMemory = new ChatJournalChatMemory(
                 repository,
                 tokenUsageCalculator,

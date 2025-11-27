@@ -15,9 +15,10 @@
  */
 package com.callibrity.ai.chatjournal.example;
 
-import com.callibrity.ai.chatjournal.example.sse.FluxSseEventStream;
+import com.callibrity.ai.chatjournal.example.sse.UncheckedSseEmitter;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -32,11 +33,11 @@ import static java.util.Optional.ofNullable;
 public class ChatController {
 
     private final ChatClient chatClient;
-    private final FluxSseEventStream fluxSseEventStream;
+    private final TaskExecutor executor;
 
-    public ChatController(ChatClient chatClient, FluxSseEventStream fluxSseEventStream) {
+    public ChatController(ChatClient chatClient, TaskExecutor executor) {
         this.chatClient = chatClient;
-        this.fluxSseEventStream = fluxSseEventStream;
+        this.executor = executor;
     }
 
     @GetMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -47,14 +48,29 @@ public class ChatController {
         var actualConversationId = ofNullable(conversationId)
                 .orElseGet(() -> UUID.randomUUID().toString());
 
-        var contentFlux = chatClient.prompt()
+        var flux = chatClient.prompt()
                 .user(question)
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, actualConversationId))
                 .stream()
                 .content();
 
-        return fluxSseEventStream.stream(new Metadata(actualConversationId), contentFlux);
+        var emitter = new SseEmitter(0L); // No timeout
+        var uncheckedEmitter = UncheckedSseEmitter.of(emitter);
+        executor.execute(() -> {
+            uncheckedEmitter.send("metadata", new Metadata(actualConversationId));
+            for (var item : flux.toIterable()) {
+                uncheckedEmitter.send("chunk", new Chunk(item));
+            }
+            uncheckedEmitter.send("done", "");
+            uncheckedEmitter.complete();
+        });
+        return emitter;
     }
 
-    public record Metadata(String conversationId) {}
+    public record Chunk(String content) {
+
+    }
+
+    public record Metadata(String conversationId) {
+    }
 }

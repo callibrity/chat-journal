@@ -29,7 +29,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
-import org.springframework.core.task.AsyncTaskExecutor;
+import org.springframework.core.task.TaskExecutor;
 
 @AutoConfiguration
 @EnableConfigurationProperties(ChatJournalProperties.class)
@@ -57,7 +57,7 @@ public class ChatJournalAutoConfiguration {
             ObjectMapper objectMapper,
             MessageSummarizer messageSummarizer,
             ChatJournalProperties properties,
-            AsyncTaskExecutor taskExecutor) {
+            TaskExecutor taskExecutor) {
         return new ChatJournalChatMemory(
                 repository,
                 tokenUsageCalculator,
