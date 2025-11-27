@@ -25,15 +25,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.AutoConfigureBefore;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.task.TaskExecutor;
 
-@AutoConfiguration
-@AutoConfigureBefore(name = "org.springframework.ai.model.chat.memory.autoconfigure.ChatMemoryAutoConfiguration")
+@AutoConfiguration(
+        after = {JdbcAutoConfiguration.class, JTokkitAutoConfiguration.class},
+        afterName = "org.springframework.ai.model.chat.client.autoconfigure.ChatClientAutoConfiguration",
+        beforeName = "org.springframework.ai.model.chat.memory.autoconfigure.ChatMemoryAutoConfiguration"
+)
 @EnableConfigurationProperties(ChatJournalProperties.class)
 public class ChatJournalAutoConfiguration {
 

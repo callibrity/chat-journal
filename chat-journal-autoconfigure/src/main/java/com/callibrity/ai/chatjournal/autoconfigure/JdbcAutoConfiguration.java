@@ -18,13 +18,16 @@ package com.callibrity.ai.chatjournal.autoconfigure;
 import com.callibrity.ai.chatjournal.repository.ChatJournalEntryRepository;
 import com.callibrity.ai.chatjournal.jdbc.JdbcChatJournalEntryRepository;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 @AutoConfiguration
+@AutoConfigureAfter(JdbcTemplateAutoConfiguration.class)
 @ConditionalOnClass(JdbcChatJournalEntryRepository.class)
 public class JdbcAutoConfiguration {
 
