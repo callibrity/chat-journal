@@ -7,27 +7,33 @@ Generate a GitHub release with release notes.
 
 ## Instructions
 
-1. First, fetch the latest tags:
+1. First, verify the build succeeds (including javadoc):
+   ```
+   mvn clean verify -q
+   ```
+   If the build fails, report the errors to the user and stop. Do not proceed with the release until all build issues are resolved.
+
+2. Fetch the latest tags:
    ```
    git fetch --tags
    ```
 
-2. Find the previous tag (the most recent tag):
+3. Find the previous tag (the most recent tag):
    ```
    git tag -l --sort=-v:refname | head -1
    ```
 
-3. Determine the new version:
+4. Determine the new version:
    - If `$ARGUMENTS` is provided and non-empty, use that as the version
    - Otherwise, parse the previous tag and increment the patch version (last digit) by 1
    - Version must be semver format: `x.y.z` (three digits)
 
-4. Get all commits between the previous tag and HEAD:
+5. Get all commits between the previous tag and HEAD:
    ```
    git log <previous-tag>..HEAD --pretty=format:"%h %s%n%b" --reverse
    ```
 
-5. Analyze the commits and generate release notes in this format:
+6. Analyze the commits and generate release notes in this format:
    ```markdown
    ## Release <version>
 
@@ -49,7 +55,7 @@ Generate a GitHub release with release notes.
 
    Only include sections that have relevant changes. Group related commits together and write user-friendly descriptions (not just commit messages).
 
-6. Based on the changes, propose 3-4 short, descriptive release title options. Format: `x.y.z - {title}`
+7. Based on the changes, propose 3-4 short, descriptive release title options. Format: `x.y.z - {title}`
 
    Examples:
    - "0.0.4 - Conversation Persistence & Infinite Scroll"
@@ -58,16 +64,16 @@ Generate a GitHub release with release notes.
 
    The title should capture the most significant or user-facing changes.
 
-7. Present the release notes and title options to the user. Ask them to:
+8. Present the release notes and title options to the user. Ask them to:
    - Confirm or edit the release notes
    - Choose a title option (or provide their own)
 
-8. Once confirmed, create the GitHub release:
+9. Once confirmed, create the GitHub release:
    ```
    gh release create <version> --title "<chosen-title>" --notes "<release-notes>"
    ```
 
-9. Report the release URL to the user.
+10. Report the release URL to the user.
 
 ## Notes
 - The release will automatically trigger the GitHub Action to publish to Maven Central
