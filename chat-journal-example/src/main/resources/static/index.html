@@ -310,6 +310,38 @@
         .message.assistant th {
             background-color: #f3f4f6;
         }
+
+        .scroll-to-bottom {
+            position: fixed;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s, background-color 0.2s;
+            z-index: 100;
+        }
+
+        .scroll-to-bottom.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .scroll-to-bottom:hover {
+            background-color: #1d4ed8;
+        }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -328,6 +360,10 @@
             Hello! I'm powered by OpenAI. How can I help you today?
         </div>
     </div>
+
+    <button class="scroll-to-bottom" id="scrollToBottom" title="Scroll to bottom">
+        <i class="fa-solid fa-arrow-down"></i>
+    </button>
 
     <div class="input-container">
         <input type="text" id="questionInput" placeholder="Type your message..." autofocus>
@@ -350,6 +386,9 @@
         let conversationId = null;
         let currentEventSource = null;
         let currentRawContent = '';
+        let totalMessages = 0;
+        let loadedMessages = 0;
+        let isLoadingHistory = false;
 
         const chatContainer = document.getElementById('chatContainer');
         const questionInput = document.getElementById('questionInput');
@@ -358,6 +397,8 @@
         const memoryUsage = document.getElementById('memoryUsage');
         const memoryBarFill = document.getElementById('memoryBarFill');
         const memoryText = document.getElementById('memoryText');
+        const scrollToBottomBtn = document.getElementById('scrollToBottom');
+        const MESSAGES_PER_PAGE = 50;
 
         // Configure markdown-it with syntax highlighting
         const md = markdownit({
@@ -447,6 +488,7 @@
             currentEventSource.addEventListener('metadata', (e) => {
                 const metadata = JSON.parse(e.data);
                 conversationId = metadata.conversationId;
+                localStorage.setItem('conversationId', conversationId);
                 statusText.textContent = `Conversation: ${conversationId.substring(0, 8)}...`;
             });
 
@@ -521,12 +563,123 @@
                 currentEventSource = null;
             }
             conversationId = null;
+            localStorage.removeItem('conversationId');
+            totalMessages = 0;
+            loadedMessages = 0;
             chatContainer.innerHTML = '';
             addMessage("Hello! I'm powered by OpenAI. How can I help you today?", 'assistant');
             statusText.textContent = 'Ready';
             memoryUsage.style.display = 'none';
             setInputEnabled(true);
         }
+
+        async function loadHistory(offset = 0) {
+            if (!conversationId || isLoadingHistory) return;
+
+            isLoadingHistory = true;
+            statusText.textContent = 'Loading history...';
+
+            try {
+                const url = `/chat/history?conversationId=${encodeURIComponent(conversationId)}&offset=${offset}&limit=${MESSAGES_PER_PAGE}`;
+                const response = await fetch(url);
+
+                if (!response.ok) {
+                    throw new Error('Failed to load history');
+                }
+
+                const data = await response.json();
+                totalMessages = data.totalCount;
+
+                if (data.messages.length > 0) {
+                    // Messages come in reverse order (newest first), so reverse them for display
+                    const messages = data.messages.reverse();
+
+                    // Save scroll position
+                    const scrollHeightBefore = chatContainer.scrollHeight;
+
+                    // Insert messages at the top
+                    const fragment = document.createDocumentFragment();
+                    messages.forEach(msg => {
+                        const messageEl = document.createElement('div');
+                        messageEl.className = `message ${msg.type.toLowerCase()}`;
+                        if (msg.type === 'ASSISTANT') {
+                            messageEl.innerHTML = renderMarkdown(msg.content);
+                            addCopyButtons(messageEl);
+                        } else {
+                            messageEl.textContent = msg.content;
+                        }
+                        fragment.appendChild(messageEl);
+                    });
+
+                    chatContainer.insertBefore(fragment, chatContainer.firstChild);
+                    loadedMessages += data.messages.length;
+
+                    // Restore scroll position (keep user at same visual position)
+                    if (offset > 0) {
+                        const scrollHeightAfter = chatContainer.scrollHeight;
+                        chatContainer.scrollTop = scrollHeightAfter - scrollHeightBefore;
+                    } else {
+                        // Initial load - scroll to bottom
+                        chatContainer.scrollTop = chatContainer.scrollHeight;
+                    }
+                }
+
+                // Update memory usage
+                updateMemoryUsage({
+                    currentTokens: data.currentTokens,
+                    maxTokens: data.maxTokens,
+                    percentageUsed: data.percentageUsed
+                });
+
+                statusText.textContent = `Conversation: ${conversationId.substring(0, 8)}...`;
+            } catch (error) {
+                console.error('Error loading history:', error);
+                statusText.textContent = 'Error loading history';
+            } finally {
+                isLoadingHistory = false;
+            }
+        }
+
+        function handleScroll() {
+            // Load more when scrolled near the top
+            if (chatContainer.scrollTop < 100 && loadedMessages < totalMessages && !isLoadingHistory) {
+                loadHistory(loadedMessages);
+            }
+
+            // Show/hide scroll-to-bottom button
+            const distanceFromBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight;
+            if (distanceFromBottom > 200) {
+                scrollToBottomBtn.classList.add('visible');
+            } else {
+                scrollToBottomBtn.classList.remove('visible');
+            }
+        }
+
+        function scrollToBottom() {
+            chatContainer.scrollTo({
+                top: chatContainer.scrollHeight,
+                behavior: 'smooth'
+            });
+        }
+
+        // Initialize on page load
+        async function init() {
+            const savedConversationId = localStorage.getItem('conversationId');
+            if (savedConversationId) {
+                conversationId = savedConversationId;
+                chatContainer.innerHTML = ''; // Remove default welcome message
+                await loadHistory(0);
+            }
+
+            // Add scroll listener for infinite scroll and scroll-to-bottom button
+            chatContainer.addEventListener('scroll', handleScroll);
+
+            // Add click listener for scroll-to-bottom button
+            scrollToBottomBtn.addEventListener('click', scrollToBottom);
+        }
+
+        // Run initialization
+        init();
     </script>
 </body>
 </html>

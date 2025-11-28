@@ -17,6 +17,7 @@ package com.callibrity.ai.chatjournal.example;
 
 import com.callibrity.ai.chatjournal.memory.ChatMemoryUsage;
 import com.callibrity.ai.chatjournal.memory.ChatMemoryUsageProvider;
+import com.callibrity.ai.chatjournal.repository.ChatJournalEntryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -61,6 +62,9 @@ class ChatControllerTest {
     @Mock
     private ChatMemoryUsageProvider memoryUsageProvider;
 
+    @Mock
+    private ChatJournalEntryRepository entryRepository;
+
     @Captor
     private ArgumentCaptor<String> userMessageCaptor;
 
@@ -73,7 +77,7 @@ class ChatControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new ChatController(chatClient, executor, memoryUsageProvider);
+        controller = new ChatController(chatClient, executor, memoryUsageProvider, entryRepository);
     }
 
     @Nested
