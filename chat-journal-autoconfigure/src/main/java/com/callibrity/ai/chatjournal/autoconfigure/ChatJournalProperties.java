@@ -18,9 +18,11 @@ package com.callibrity.ai.chatjournal.autoconfigure;
 import com.knuddels.jtokkit.api.EncodingType;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
+@Data
 @ConfigurationProperties(prefix = "chat.journal")
 @Validated
 public class ChatJournalProperties {
@@ -32,10 +34,10 @@ public class ChatJournalProperties {
     private int maxTokens = 8192;
 
     /**
-     * Maximum number of entries allowed per conversation.
+     * Maximum number of messages allowed per conversation.
      */
     @Positive
-    private int maxEntries = 10000;
+    private int maxConversationLength = 10000;
 
     /**
      * Minimum number of entries to retain after compaction.
@@ -54,44 +56,4 @@ public class ChatJournalProperties {
      */
     @NotNull
     private EncodingType encodingType = EncodingType.O200K_BASE;
-
-    public int getMaxTokens() {
-        return maxTokens;
-    }
-
-    public void setMaxTokens(int maxTokens) {
-        this.maxTokens = maxTokens;
-    }
-
-    public int getMaxEntries() {
-        return maxEntries;
-    }
-
-    public void setMaxEntries(int maxEntries) {
-        this.maxEntries = maxEntries;
-    }
-
-    public int getMinRetainedEntries() {
-        return minRetainedEntries;
-    }
-
-    public void setMinRetainedEntries(int minRetainedEntries) {
-        this.minRetainedEntries = minRetainedEntries;
-    }
-
-    public int getCharactersPerToken() {
-        return charactersPerToken;
-    }
-
-    public void setCharactersPerToken(int charactersPerToken) {
-        this.charactersPerToken = charactersPerToken;
-    }
-
-    public EncodingType getEncodingType() {
-        return encodingType;
-    }
-
-    public void setEncodingType(EncodingType encodingType) {
-        this.encodingType = encodingType;
-    }
 }

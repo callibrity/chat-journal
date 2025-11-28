@@ -168,12 +168,9 @@ public class ChatJournalCheckpointer {
      */
     public int getTotalTokens(String conversationId) {
         validateConversationId(conversationId);
-        Optional<ChatJournalCheckpoint> checkpoint = checkpointRepository.findCheckpoint(conversationId);
-        if (checkpoint.isPresent()) {
-            int entryTokens = entryRepository.sumTokensAfterIndex(conversationId, checkpoint.get().checkpointIndex());
-            return checkpoint.get().tokens() + entryTokens;
-        }
-        return entryRepository.sumTokens(conversationId);
+        return checkpointRepository.findCheckpoint(conversationId)
+                .map(cp -> cp.tokens() + entryRepository.sumTokensAfterIndex(conversationId, cp.checkpointIndex()))
+                .orElseGet(() -> entryRepository.sumTokens(conversationId));
     }
 
     /**

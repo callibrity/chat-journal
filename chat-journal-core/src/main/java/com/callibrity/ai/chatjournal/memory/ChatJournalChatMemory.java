@@ -41,7 +41,7 @@ import java.util.Objects;
  * while staying within LLM context window constraints.
  *
  * <h2>Message Limits</h2>
- * <p>Conversations are limited to {@code maxEntries} messages to prevent unbounded growth.
+ * <p>Conversations are limited to {@code maxConversationLength} messages to prevent unbounded growth.
  * Attempts to add messages that would exceed this limit will throw an exception.
  *
  * <h2>Thread Safety</h2>
@@ -56,7 +56,7 @@ import java.util.Objects;
  *     entryMapper,
  *     checkpointer,
  *     taskExecutor,
- *     10000  // maxEntries
+ *     10000  // maxConversationLength
  * );
  *
  * // Use with Spring AI ChatClient
@@ -77,7 +77,7 @@ public class ChatJournalChatMemory implements ChatMemory, ChatMemoryUsageProvide
     private final ChatJournalEntryMapper entryMapper;
     private final ChatJournalCheckpointer checkpointer;
     private final TaskExecutor taskExecutor;
-    private final int maxEntries;
+    private final int maxConversationLength;
 
     /**
      * Creates a new ChatJournalChatMemory with the specified components.
@@ -87,25 +87,25 @@ public class ChatJournalChatMemory implements ChatMemory, ChatMemoryUsageProvide
      * @param entryMapper the mapper for converting between messages and entries
      * @param checkpointer the checkpointer for managing compaction
      * @param taskExecutor the executor for running asynchronous compaction tasks
-     * @param maxEntries the maximum number of entries allowed per conversation; must be positive
+     * @param maxConversationLength the maximum number of messages allowed per conversation; must be positive
      * @throws NullPointerException if any object parameter is null
-     * @throws IllegalArgumentException if maxEntries is not positive
+     * @throws IllegalArgumentException if maxConversationLength is not positive
      */
     public ChatJournalChatMemory(ChatJournalEntryRepository entryRepository,
                                  ChatJournalCheckpointRepository checkpointRepository,
                                  ChatJournalEntryMapper entryMapper,
                                  ChatJournalCheckpointer checkpointer,
                                  TaskExecutor taskExecutor,
-                                 int maxEntries) {
+                                 int maxConversationLength) {
         this.entryRepository = Objects.requireNonNull(entryRepository, "entryRepository must not be null");
         this.checkpointRepository = Objects.requireNonNull(checkpointRepository, "checkpointRepository must not be null");
         this.entryMapper = Objects.requireNonNull(entryMapper, "entryMapper must not be null");
         this.checkpointer = Objects.requireNonNull(checkpointer, "checkpointer must not be null");
         this.taskExecutor = Objects.requireNonNull(taskExecutor, "taskExecutor must not be null");
-        if (maxEntries <= 0) {
-            throw new IllegalArgumentException("maxEntries must be positive");
+        if (maxConversationLength <= 0) {
+            throw new IllegalArgumentException("maxConversationLength must be positive");
         }
-        this.maxEntries = maxEntries;
+        this.maxConversationLength = maxConversationLength;
     }
 
     /**
@@ -116,18 +116,17 @@ public class ChatJournalChatMemory implements ChatMemory, ChatMemoryUsageProvide
      *
      * @throws NullPointerException if conversationId or messages is null
      * @throws IllegalArgumentException if conversationId is empty
-     * @throws IllegalStateException if adding the messages would exceed the maximum entries limit
+     * @throws ConversationLimitExceededException if adding the messages would exceed the maximum entries limit
      */
     @Override
     public void add(String conversationId, List<Message> messages) {
         validateConversationId(conversationId);
         Objects.requireNonNull(messages, "messages must not be null");
 
-        int currentCount = entryRepository.findAll(conversationId).size();
-        if (currentCount + messages.size() > maxEntries) {
-            throw new IllegalStateException(
-                    "Cannot add " + messages.size() + " messages: would exceed maximum of " + maxEntries +
-                    " entries (current: " + currentCount + ")");
+        int currentLength = entryRepository.findAll(conversationId).size();
+        if (currentLength + messages.size() > maxConversationLength) {
+            throw new ConversationLimitExceededException(
+                    conversationId, currentLength, maxConversationLength, messages.size());
         }
 
         List<ChatJournalEntry> entries = entryMapper.toEntries(messages);

@@ -41,8 +41,8 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
-import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -140,16 +140,20 @@ class ChatJournalChatMemoryTest {
                     entryMapper,
                     checkpointer,
                     taskExecutor,
-                    2  // maxEntries = 2
+                    2  // maxConversationLength = 2
             );
 
-            assertThatIllegalStateException()
+            assertThatExceptionOfType(ConversationLimitExceededException.class)
                     .isThrownBy(() -> smallMemory.add(CONVERSATION_ID, List.of(
                             new UserMessage("New 1"),
                             new AssistantMessage("New 2")
                     )))
-                    .withMessageContaining("Cannot add 2 messages")
-                    .withMessageContaining("would exceed maximum of 2");
+                    .satisfies(e -> {
+                        assertThat(e.getConversationId()).isEqualTo(CONVERSATION_ID);
+                        assertThat(e.getCurrentLength()).isEqualTo(1);
+                        assertThat(e.getMaxLength()).isEqualTo(2);
+                        assertThat(e.getNewMessageCount()).isEqualTo(2);
+                    });
         }
     }
 
@@ -359,7 +363,7 @@ class ChatJournalChatMemoryTest {
         }
 
         @Test
-        void shouldRejectZeroMaxEntries() {
+        void shouldRejectZeroMaxConversationLength() {
             assertThatIllegalArgumentException()
                     .isThrownBy(() -> new ChatJournalChatMemory(
                             entryRepository,
@@ -369,11 +373,11 @@ class ChatJournalChatMemoryTest {
                             taskExecutor,
                             0
                     ))
-                    .withMessage("maxEntries must be positive");
+                    .withMessage("maxConversationLength must be positive");
         }
 
         @Test
-        void shouldRejectNegativeMaxEntries() {
+        void shouldRejectNegativeMaxConversationLength() {
             assertThatIllegalArgumentException()
                     .isThrownBy(() -> new ChatJournalChatMemory(
                             entryRepository,
@@ -383,7 +387,7 @@ class ChatJournalChatMemoryTest {
                             taskExecutor,
                             -100
                     ))
-                    .withMessage("maxEntries must be positive");
+                    .withMessage("maxConversationLength must be positive");
         }
     }
 

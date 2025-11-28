@@ -122,7 +122,7 @@ public class ChatJournalAutoConfiguration {
                 entryMapper,
                 checkpointer,
                 taskExecutor,
-                properties.getMaxEntries()
+                properties.getMaxConversationLength()
         );
     }
 }

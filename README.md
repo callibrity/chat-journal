@@ -115,15 +115,31 @@ public SseEmitter stream(@RequestParam String question,
 Configure Chat Journal using application properties:
 
 ```properties
-# Maximum tokens before compaction is triggered
+# Maximum tokens before compaction is triggered (default: 8192)
 chat.journal.max-tokens=8192
 
-# Minimum number of recent entries to always retain (never compacted)
+# Maximum number of messages allowed per conversation (default: 10000)
+chat.journal.max-conversation-length=10000
+
+# Minimum number of recent messages to retain after compaction (default: 6)
 chat.journal.min-retained-entries=6
 
 # JTokkit encoding type for token counting (default: O200K_BASE)
 chat.journal.encoding-type=O200K_BASE
+
+# Characters per token for simple token calculator fallback (default: 4)
+chat.journal.characters-per-token=4
 ```
+
+### Configuration Properties Reference
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `chat.journal.max-tokens` | 8192 | Token threshold that triggers compaction |
+| `chat.journal.max-conversation-length` | 10000 | Maximum messages per conversation |
+| `chat.journal.min-retained-entries` | 6 | Recent messages preserved during compaction |
+| `chat.journal.encoding-type` | O200K_BASE | JTokkit encoding for token counting |
+| `chat.journal.characters-per-token` | 4 | Fallback token estimation (when JTokkit unavailable) |
 
 ### Available Encoding Types
 
@@ -183,7 +199,11 @@ Example response:
 
 ## Database Setup
 
-Chat Journal requires a `chat_journal_entry` table. Schema files are provided for common databases:
+Chat Journal requires two tables:
+- `chat_journal` - Stores conversation messages
+- `chat_journal_checkpoint` - Stores compaction checkpoints with summaries
+
+Schema files are provided for common databases:
 
 - `schema-postgresql.sql`
 - `schema-mysql.sql`
