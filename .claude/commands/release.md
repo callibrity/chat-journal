@@ -29,12 +29,18 @@ Generate a GitHub release with release notes.
    - Otherwise, parse the previous tag and increment the patch version (last digit) by 1
    - Version must be semver format: `x.y.z` (three digits)
 
-5. Get all commits between the previous tag and HEAD:
+5. Verify the tag does not already exist:
+   ```
+   git tag -l <version>
+   ```
+   If the tag already exists, inform the user that version `<version>` has already been released and stop. Do not attempt to overwrite existing tags/releases (it will fail in Maven Central anyway).
+
+6. Get all commits between the previous tag and HEAD:
    ```
    git log <previous-tag>..HEAD --pretty=format:"%h %s%n%b" --reverse
    ```
 
-6. Analyze the commits and generate release notes in this format:
+7. Analyze the commits and generate release notes in this format:
    ```markdown
    ## Release <version>
 
@@ -56,7 +62,7 @@ Generate a GitHub release with release notes.
 
    Only include sections that have relevant changes. Group related commits together and write user-friendly descriptions (not just commit messages).
 
-7. Based on the changes, propose 3-4 short, descriptive release title options. Format: `x.y.z - {title}`
+8. Based on the changes, propose 3-4 short, descriptive release title options. Format: `x.y.z - {title}`
 
    Examples:
    - "0.0.4 - Conversation Persistence & Infinite Scroll"
@@ -65,16 +71,16 @@ Generate a GitHub release with release notes.
 
    The title should capture the most significant or user-facing changes.
 
-8. Present the release notes and title options to the user. Ask them to:
+9. Present the release notes and title options to the user. Ask them to:
    - Confirm or edit the release notes
    - Choose a title option (or provide their own)
 
-9. Once confirmed, create the GitHub release:
+10. Once confirmed, create the GitHub release:
    ```
    gh release create <version> --title "<chosen-title>" --notes "<release-notes>"
    ```
 
-10. Report the release URL to the user.
+11. Report the release URL to the user.
 
 ## Notes
 - The release will automatically trigger the GitHub Action to publish to Maven Central
