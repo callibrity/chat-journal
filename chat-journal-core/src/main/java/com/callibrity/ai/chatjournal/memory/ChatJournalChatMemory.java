@@ -23,6 +23,7 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.core.task.TaskExecutor;
+import org.springframework.lang.NonNull;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -119,7 +120,7 @@ public class ChatJournalChatMemory implements ChatMemory, ChatMemoryUsageProvide
      * @throws ConversationLimitExceededException if adding the messages would exceed the maximum entries limit
      */
     @Override
-    public void add(String conversationId, List<Message> messages) {
+    public void add(@NonNull String conversationId, @NonNull List<Message> messages) {
         validateConversationId(conversationId);
         Objects.requireNonNull(messages, "messages must not be null");
 
@@ -149,7 +150,7 @@ public class ChatJournalChatMemory implements ChatMemory, ChatMemoryUsageProvide
      * @throws IllegalArgumentException if conversationId is empty
      */
     @Override
-    public List<Message> get(String conversationId) {
+    public List<Message> get(@NonNull String conversationId) {
         validateConversationId(conversationId);
 
         List<Message> messages = new ArrayList<>();
@@ -176,7 +177,7 @@ public class ChatJournalChatMemory implements ChatMemory, ChatMemoryUsageProvide
      * @throws IllegalArgumentException if conversationId is empty
      */
     @Override
-    public void clear(String conversationId) {
+    public void clear(@NonNull String conversationId) {
         validateConversationId(conversationId);
         checkpointRepository.deleteCheckpoint(conversationId);
         entryRepository.deleteAll(conversationId);
