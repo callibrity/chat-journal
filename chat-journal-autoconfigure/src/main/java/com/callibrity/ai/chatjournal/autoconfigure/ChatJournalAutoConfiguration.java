@@ -25,7 +25,6 @@ import com.callibrity.ai.chatjournal.summary.ChatClientMessageSummarizer;
 import com.callibrity.ai.chatjournal.summary.MessageSummarizer;
 import com.callibrity.ai.chatjournal.token.SimpleTokenUsageCalculator;
 import com.callibrity.ai.chatjournal.token.TokenUsageCalculator;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -61,11 +60,8 @@ public class ChatJournalAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnBean(ObjectMapper.class)
-    public ChatJournalEntryMapper chatJournalEntryMapper(
-            ObjectMapper objectMapper,
-            TokenUsageCalculator tokenUsageCalculator) {
-        return new ChatJournalEntryMapper(objectMapper, tokenUsageCalculator);
+    public ChatJournalEntryMapper chatJournalEntryMapper(TokenUsageCalculator tokenUsageCalculator) {
+        return new ChatJournalEntryMapper(tokenUsageCalculator);
     }
 
     @Bean

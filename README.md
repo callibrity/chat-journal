@@ -16,6 +16,7 @@ Chat Journal is a Spring Boot starter for chat memory management with automatic 
 ## Features
 
 - **Persistent Chat Memory**: Store conversation history in a database using JDBC
+- **Durable Conversation History**: Query complete conversation history for chat UIs, analytics, or audit trails
 - **Automatic Compaction**: Intelligently summarize older messages when token limits are exceeded
 - **Token Counting**: Accurate token counting using JTokkit (supports OpenAI tokenizers)
 - **Memory Usage Monitoring**: Query token usage statistics to display memory budget consumption
@@ -197,6 +198,56 @@ Example response:
 }
 ```
 
+## Conversation History
+
+Chat Journal provides durable conversation history storage. While the `ChatMemory` interface provides a compacted view optimized for AI context windows, the underlying `ChatJournalEntryRepository` gives you access to the complete conversation history for building chat UIs, analytics, or audit trails.
+
+### Using ChatJournalEntryRepository
+
+Inject `ChatJournalEntryRepository` to query full conversation history:
+
+```java
+@RestController
+public class ChatController {
+
+    private final ChatJournalEntryRepository entryRepository;
+
+    public ChatController(ChatJournalEntryRepository entryRepository) {
+        this.entryRepository = entryRepository;
+    }
+
+    @GetMapping("/history")
+    public List<ChatJournalEntry> getHistory(
+            @RequestParam String conversationId,
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(defaultValue = "50") int limit) {
+        return entryRepository.findVisibleEntries(conversationId, offset, limit);
+    }
+}
+```
+
+### ChatJournalEntryRepository Methods
+
+| Method | Description |
+|--------|-------------|
+| `findVisibleEntries(conversationId, offset, limit)` | Paginated retrieval of USER and ASSISTANT messages (most recent first) |
+| `countVisibleEntries(conversationId)` | Total count of visible messages for pagination |
+| `findAll(conversationId)` | All entries including SYSTEM messages in chronological order |
+| `deleteAll(conversationId)` | Remove all entries for a conversation |
+
+### ChatJournalEntry Record
+
+Each entry contains:
+
+| Field | Description |
+|-------|-------------|
+| `messageIndex` | Ordinal position within the conversation |
+| `messageType` | Message type: USER, ASSISTANT, SYSTEM, or TOOL |
+| `content` | The message content |
+| `tokens` | Token count for this message |
+
+The example application demonstrates these capabilities with a full chat UI featuring session persistence and infinite scroll through conversation history.
+
 ## Database Setup
 
 Chat Journal requires two tables:
@@ -241,6 +292,12 @@ Chat Journal includes an example application demonstrating integration with Open
 4. Open your browser to `http://localhost:8080` to interact with the chat interface.
 
 The example uses Docker Compose to automatically start a PostgreSQL database.
+
+The example application demonstrates:
+- Streaming chat responses with Server-Sent Events
+- Durable conversation history with session persistence across page reloads
+- Infinite scroll pagination through conversation history
+- Real-time memory usage monitoring
 
 ## Modules
 

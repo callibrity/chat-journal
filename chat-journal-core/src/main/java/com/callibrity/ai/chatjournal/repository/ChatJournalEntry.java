@@ -27,9 +27,9 @@ package com.callibrity.ai.chatjournal.repository;
  *
  * @param messageIndex the ordinal position of this message within the conversation;
  *                     used for ordering and identifying entries during compaction
- * @param messageType the type of message (USER, ASSISTANT, SYSTEM, or TOOL);
+ * @param messageType the type of message (USER or ASSISTANT);
  *                    corresponds to Spring AI's MessageType
- * @param content the message content; for tool response messages, this is JSON-serialized
+ * @param content the message content
  * @param tokens the estimated or calculated token count for this message
  * @see ChatJournalEntryRepository
  * @see com.callibrity.ai.chatjournal.memory.ChatJournalEntryMapper

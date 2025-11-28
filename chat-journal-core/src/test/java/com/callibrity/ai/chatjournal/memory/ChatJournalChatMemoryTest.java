@@ -31,8 +31,6 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.MessageType;
 import org.springframework.ai.chat.messages.SystemMessage;
-import org.springframework.ai.chat.messages.ToolResponseMessage;
-import org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.core.task.SyncTaskExecutor;
 import org.springframework.core.task.TaskExecutor;
@@ -233,61 +231,6 @@ class ChatJournalChatMemoryTest {
 
             verify(checkpointRepository).deleteCheckpoint(CONVERSATION_ID);
             verify(entryRepository).deleteAll(CONVERSATION_ID);
-        }
-    }
-
-    @Nested
-    class ToolResponseMessageSerialization {
-
-        @Test
-        void shouldSerializeToolResponseMessageWhenAdding() {
-            when(entryRepository.findAll(CONVERSATION_ID)).thenReturn(List.of());
-            when(checkpointer.requiresCheckpoint(CONVERSATION_ID)).thenReturn(false);
-
-            ToolResponseMessage toolMessage = ToolResponseMessage.builder()
-                    .responses(List.of(
-                            new ToolResponse("tool-1", "tool-name", "Tool result data")
-                    ))
-                    .build();
-
-            ChatJournalEntry toolEntry = new ChatJournalEntry(0, MessageType.TOOL.name(),
-                    "[{\"id\":\"tool-1\",\"name\":\"tool-name\",\"responseData\":\"Tool result data\"}]", 50);
-            when(entryMapper.toEntries(List.of(toolMessage))).thenReturn(List.of(toolEntry));
-
-            chatMemory.add(CONVERSATION_ID, List.of(toolMessage));
-
-            verify(entryRepository).save(eq(CONVERSATION_ID), entriesCaptor.capture());
-            ChatJournalEntry savedEntry = entriesCaptor.getValue().getFirst();
-
-            assertThat(savedEntry.messageType()).isEqualTo(MessageType.TOOL.name());
-            assertThat(savedEntry.content()).contains("tool-1");
-        }
-
-        @Test
-        void shouldDeserializeToolResponseMessageWhenGetting() {
-            when(checkpointRepository.findCheckpoint(CONVERSATION_ID)).thenReturn(Optional.empty());
-
-            ChatJournalEntry toolEntry = new ChatJournalEntry(1, MessageType.TOOL.name(),
-                    "[{\"id\":\"tool-1\",\"name\":\"calculator\",\"responseData\":\"42\"}]", 50);
-            when(entryRepository.findAll(CONVERSATION_ID)).thenReturn(List.of(toolEntry));
-
-            ToolResponseMessage expectedToolMessage = ToolResponseMessage.builder()
-                    .responses(List.of(new ToolResponse("tool-1", "calculator", "42")))
-                    .build();
-            when(entryMapper.toMessages(List.of(toolEntry))).thenReturn(List.of(expectedToolMessage));
-
-            List<Message> messages = chatMemory.get(CONVERSATION_ID);
-
-            assertThat(messages).hasSize(1);
-            assertThat(messages.getFirst()).isInstanceOf(ToolResponseMessage.class);
-
-            ToolResponseMessage toolMessage = (ToolResponseMessage) messages.getFirst();
-            List<ToolResponse> responses = toolMessage.getResponses();
-
-            assertThat(responses).hasSize(1);
-            assertThat(responses.getFirst().id()).isEqualTo("tool-1");
-            assertThat(responses.getFirst().name()).isEqualTo("calculator");
-            assertThat(responses.getFirst().responseData()).isEqualTo("42");
         }
     }
 

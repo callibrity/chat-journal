@@ -25,12 +25,10 @@ import com.callibrity.ai.chatjournal.summary.ChatClientMessageSummarizer;
 import com.callibrity.ai.chatjournal.summary.MessageSummarizer;
 import com.callibrity.ai.chatjournal.token.SimpleTokenUsageCalculator;
 import com.callibrity.ai.chatjournal.token.TokenUsageCalculator;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
-import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -43,10 +41,7 @@ import static org.mockito.Mockito.when;
 class ChatJournalAutoConfigurationTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-            .withConfiguration(AutoConfigurations.of(
-                    ChatJournalAutoConfiguration.class,
-                    JacksonAutoConfiguration.class
-            ));
+            .withConfiguration(AutoConfigurations.of(ChatJournalAutoConfiguration.class));
 
     @Test
     void shouldCreateSimpleTokenUsageCalculator() {
@@ -100,7 +95,6 @@ class ChatJournalAutoConfigurationTest {
     @Test
     void shouldCreateEntryMapper() {
         contextRunner
-                .withUserConfiguration(ObjectMapperConfig.class)
                 .run(context -> {
                     assertThat(context).hasSingleBean(ChatJournalEntryMapper.class);
                 });
@@ -127,8 +121,7 @@ class ChatJournalAutoConfigurationTest {
         contextRunner
                 .withUserConfiguration(
                         ChatClientBuilderConfig.class,
-                        RepositoriesConfig.class,
-                        ObjectMapperConfig.class
+                        RepositoriesConfig.class
                 )
                 .run(context -> {
                     assertThat(context).hasSingleBean(ChatJournalCheckpointer.class);
@@ -149,8 +142,7 @@ class ChatJournalAutoConfigurationTest {
         contextRunner
                 .withUserConfiguration(
                         ChatClientBuilderConfig.class,
-                        RepositoriesConfig.class,
-                        ObjectMapperConfig.class
+                        RepositoriesConfig.class
                 )
                 .run(context -> {
                     assertThat(context).hasSingleBean(ChatMemory.class);
@@ -228,14 +220,6 @@ class ChatJournalAutoConfigurationTest {
         @Bean
         public TaskExecutor taskExecutor() {
             return mock(TaskExecutor.class);
-        }
-    }
-
-    @Configuration
-    static class ObjectMapperConfig {
-        @Bean
-        public ObjectMapper objectMapper() {
-            return new ObjectMapper();
         }
     }
 }
