@@ -9,8 +9,9 @@ Generate a GitHub release with release notes.
 
 1. First, verify the build succeeds (including javadoc):
    ```
-   mvn clean verify -q
+   mvn clean verify javadoc:javadoc -q
    ```
+   The explicit `javadoc:javadoc` goal is needed because javadoc generation is only in the `release` profile.
    If the build fails, report the errors to the user and stop. Do not proceed with the release until all build issues are resolved.
 
 2. Fetch the latest tags:
