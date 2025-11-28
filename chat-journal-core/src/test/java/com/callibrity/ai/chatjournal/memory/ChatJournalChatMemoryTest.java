@@ -143,11 +143,13 @@ class ChatJournalChatMemoryTest {
                     2  // maxConversationLength = 2
             );
 
+            List<Message> newMessages = List.of(
+                    new UserMessage("New 1"),
+                    new AssistantMessage("New 2")
+            );
+
             assertThatExceptionOfType(ConversationLimitExceededException.class)
-                    .isThrownBy(() -> smallMemory.add(CONVERSATION_ID, List.of(
-                            new UserMessage("New 1"),
-                            new AssistantMessage("New 2")
-                    )))
+                    .isThrownBy(() -> smallMemory.add(CONVERSATION_ID, newMessages))
                     .satisfies(e -> {
                         assertThat(e.getConversationId()).isEqualTo(CONVERSATION_ID);
                         assertThat(e.getCurrentLength()).isEqualTo(1);

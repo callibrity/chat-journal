@@ -36,6 +36,10 @@ import java.util.Optional;
  */
 public class JdbcChatJournalCheckpointRepository implements ChatJournalCheckpointRepository {
 
+    private static final String COL_CHECKPOINT_INDEX = "checkpoint_index";
+    private static final String COL_SUMMARY = "summary";
+    private static final String COL_TOKENS = "tokens";
+
     private final JdbcTemplate jdbcTemplate;
 
     /**
@@ -53,11 +57,7 @@ public class JdbcChatJournalCheckpointRepository implements ChatJournalCheckpoin
         validateConversationId(conversationId);
         List<ChatJournalCheckpoint> checkpoints = jdbcTemplate.query(
                 "SELECT checkpoint_index, summary, tokens FROM chat_journal_checkpoint WHERE conversation_id = ?",
-                (rs, rowNum) -> new ChatJournalCheckpoint(
-                        rs.getLong("checkpoint_index"),
-                        rs.getString("summary"),
-                        rs.getInt("tokens")
-                ),
+                this::mapRow,
                 conversationId
         );
         return checkpoints.isEmpty() ? Optional.empty() : Optional.of(checkpoints.getFirst());
@@ -89,5 +89,13 @@ public class JdbcChatJournalCheckpointRepository implements ChatJournalCheckpoin
         if (conversationId.isEmpty()) {
             throw new IllegalArgumentException("conversationId must not be empty");
         }
+    }
+
+    private ChatJournalCheckpoint mapRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
+        return new ChatJournalCheckpoint(
+                rs.getLong(COL_CHECKPOINT_INDEX),
+                rs.getString(COL_SUMMARY),
+                rs.getInt(COL_TOKENS)
+        );
     }
 }

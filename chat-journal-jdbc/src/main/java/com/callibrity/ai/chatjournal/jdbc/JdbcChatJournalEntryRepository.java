@@ -34,6 +34,11 @@ import java.util.Objects;
  */
 public class JdbcChatJournalEntryRepository implements ChatJournalEntryRepository {
 
+    private static final String COL_MESSAGE_INDEX = "message_index";
+    private static final String COL_MESSAGE_TYPE = "message_type";
+    private static final String COL_CONTENT = "content";
+    private static final String COL_TOKENS = "tokens";
+
     private final JdbcTemplate jdbcTemplate;
 
     /**
@@ -68,12 +73,7 @@ public class JdbcChatJournalEntryRepository implements ChatJournalEntryRepositor
         validateConversationId(conversationId);
         return jdbcTemplate.query(
                 "SELECT message_index, message_type, content, tokens FROM chat_journal WHERE conversation_id = ? ORDER BY message_index",
-                (rs, rowNum) -> new ChatJournalEntry(
-                        rs.getLong("message_index"),
-                        rs.getString("message_type"),
-                        rs.getString("content"),
-                        rs.getInt("tokens")
-                ),
+                this::mapRow,
                 conversationId
         );
     }
@@ -89,12 +89,7 @@ public class JdbcChatJournalEntryRepository implements ChatJournalEntryRepositor
         }
         return jdbcTemplate.query(
                 "SELECT message_index, message_type, content, tokens FROM chat_journal WHERE conversation_id = ? AND message_type IN ('USER', 'ASSISTANT') ORDER BY message_index DESC LIMIT ? OFFSET ?",
-                (rs, rowNum) -> new ChatJournalEntry(
-                        rs.getLong("message_index"),
-                        rs.getString("message_type"),
-                        rs.getString("content"),
-                        rs.getInt("tokens")
-                ),
+                this::mapRow,
                 conversationId,
                 limit,
                 offset
@@ -117,12 +112,7 @@ public class JdbcChatJournalEntryRepository implements ChatJournalEntryRepositor
         validateConversationId(conversationId);
         return jdbcTemplate.query(
                 "SELECT message_index, message_type, content, tokens FROM chat_journal WHERE conversation_id = ? AND message_index > ? ORDER BY message_index",
-                (rs, rowNum) -> new ChatJournalEntry(
-                        rs.getLong("message_index"),
-                        rs.getString("message_type"),
-                        rs.getString("content"),
-                        rs.getInt("tokens")
-                ),
+                this::mapRow,
                 conversationId,
                 messageIndex
         );
@@ -162,5 +152,14 @@ public class JdbcChatJournalEntryRepository implements ChatJournalEntryRepositor
         if (conversationId.isEmpty()) {
             throw new IllegalArgumentException("conversationId must not be empty");
         }
+    }
+
+    private ChatJournalEntry mapRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
+        return new ChatJournalEntry(
+                rs.getLong(COL_MESSAGE_INDEX),
+                rs.getString(COL_MESSAGE_TYPE),
+                rs.getString(COL_CONTENT),
+                rs.getInt(COL_TOKENS)
+        );
     }
 }
