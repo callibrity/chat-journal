@@ -20,18 +20,17 @@ import java.util.List;
 /**
  * Repository interface for persisting and retrieving chat journal entries.
  *
- * <p>This interface defines the storage operations required by {@link
- * com.callibrity.ai.chatjournal.memory.ChatJournalChatMemory} for managing conversation
- * history. Implementations handle the actual persistence mechanism (e.g., JDBC, JPA, etc.).
+ * <p>This interface defines the storage operations for chat messages. It is a
+ * general-purpose persistence layer that can be used by any component needing
+ * access to conversation history (UI, APIs, ChatMemory, etc.).
  *
- * <p>Entries are organized by conversation ID, allowing multiple independent conversations
- * to be stored and managed separately.
+ * <p>Entries are organized by conversation ID, allowing multiple independent
+ * conversations to be stored and managed separately.
  *
- * <p>Implementations must be thread-safe as multiple conversations may be processed
- * concurrently.
+ * <p>Implementations must be thread-safe as multiple conversations may be
+ * processed concurrently.
  *
  * @see ChatJournalEntry
- * @see com.callibrity.ai.chatjournal.memory.ChatJournalChatMemory
  */
 public interface ChatJournalEntryRepository {
 
@@ -54,23 +53,56 @@ public interface ChatJournalEntryRepository {
     List<ChatJournalEntry> findAll(String conversationId);
 
     /**
-     * Retrieves entries eligible for compaction.
+     * Retrieves visible entries (USER and ASSISTANT only) for UI display with pagination.
      *
-     * <p>Returns older entries that can be summarized, excluding the most recent entries
-     * that should be preserved. The number of entries to retain is implementation-specific.
+     * <p>Returns entries in reverse chronological order (most recent first), suitable
+     * for a chat UI that loads from the bottom and paginates upward. SYSTEM messages
+     * are excluded as they are implementation details not meant for display.
      *
      * @param conversationId the unique identifier for the conversation
-     * @return entries eligible for compaction, ordered by message index descending; never null
+     * @param offset the number of entries to skip (0 = start from most recent)
+     * @param limit the maximum number of entries to return
+     * @return visible entries in reverse chronological order; never null
      */
-    List<ChatJournalEntry> findEntriesForCompaction(String conversationId);
+    List<ChatJournalEntry> findVisibleEntries(String conversationId, int offset, int limit);
 
     /**
-     * Gets the total token count for all entries in a conversation.
+     * Counts the total number of visible entries (USER and ASSISTANT only) for a conversation.
+     *
+     * <p>This is useful for pagination calculations in the UI.
      *
      * @param conversationId the unique identifier for the conversation
-     * @return the sum of tokens across all entries
+     * @return the count of visible entries
      */
-    int getTotalTokens(String conversationId);
+    int countVisibleEntries(String conversationId);
+
+    /**
+     * Retrieves entries after a specific message index.
+     *
+     * <p>This is useful for retrieving entries that come after a checkpoint.
+     *
+     * @param conversationId the unique identifier for the conversation
+     * @param messageIndex the index after which to retrieve entries
+     * @return entries with index greater than messageIndex, ordered by message index; never null
+     */
+    List<ChatJournalEntry> findEntriesAfterIndex(String conversationId, long messageIndex);
+
+    /**
+     * Calculates the sum of tokens for all entries in a conversation.
+     *
+     * @param conversationId the unique identifier for the conversation
+     * @return the total token count for all entries
+     */
+    int sumTokens(String conversationId);
+
+    /**
+     * Calculates the sum of tokens for entries after a specific message index.
+     *
+     * @param conversationId the unique identifier for the conversation
+     * @param messageIndex the index after which to sum tokens
+     * @return the total token count for entries after the index
+     */
+    int sumTokensAfterIndex(String conversationId, long messageIndex);
 
     /**
      * Deletes all entries for a conversation.
@@ -78,15 +110,4 @@ public interface ChatJournalEntryRepository {
      * @param conversationId the unique identifier for the conversation
      */
     void deleteAll(String conversationId);
-
-    /**
-     * Replaces compactable entries with a summary entry.
-     *
-     * <p>This atomic operation removes older entries and inserts a summary entry in their
-     * place, preserving recent entries that should not be compacted.
-     *
-     * @param conversationId the unique identifier for the conversation
-     * @param summaryEntry the summary entry to insert; must not be null
-     */
-    void replaceEntriesWithSummary(String conversationId, ChatJournalEntry summaryEntry);
 }

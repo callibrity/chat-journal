@@ -32,6 +32,12 @@ public class ChatJournalProperties {
     private int maxTokens = 8192;
 
     /**
+     * Maximum number of entries allowed per conversation.
+     */
+    @Positive
+    private int maxEntries = 10000;
+
+    /**
      * Minimum number of entries to retain after compaction.
      */
     @Positive
@@ -55,6 +61,14 @@ public class ChatJournalProperties {
 
     public void setMaxTokens(int maxTokens) {
         this.maxTokens = maxTokens;
+    }
+
+    public int getMaxEntries() {
+        return maxEntries;
+    }
+
+    public void setMaxEntries(int maxEntries) {
+        this.maxEntries = maxEntries;
     }
 
     public int getMinRetainedEntries() {

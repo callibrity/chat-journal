@@ -3,7 +3,16 @@ CREATE TABLE chat_journal (
     conversation_id VARCHAR2(255) NOT NULL,
     message_type    VARCHAR2(20) NOT NULL,
     content         CLOB NOT NULL,
-    tokens          NUMBER(10) NOT NULL
+    tokens          NUMBER(10) NOT NULL,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_chat_journal_conversation_id ON chat_journal (conversation_id);
+
+CREATE TABLE chat_journal_checkpoint (
+    conversation_id  VARCHAR2(255) PRIMARY KEY,
+    checkpoint_index NUMBER(19) NOT NULL,
+    summary          CLOB NOT NULL,
+    tokens           NUMBER(10) NOT NULL,
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

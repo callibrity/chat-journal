@@ -15,9 +15,13 @@
  */
 package com.callibrity.ai.chatjournal.autoconfigure;
 
-import com.callibrity.ai.chatjournal.summary.ChatClientMessageSummarizer;
 import com.callibrity.ai.chatjournal.memory.ChatJournalChatMemory;
+import com.callibrity.ai.chatjournal.memory.ChatJournalCheckpointFactory;
+import com.callibrity.ai.chatjournal.memory.ChatJournalCheckpointer;
+import com.callibrity.ai.chatjournal.memory.ChatJournalEntryMapper;
+import com.callibrity.ai.chatjournal.repository.ChatJournalCheckpointRepository;
 import com.callibrity.ai.chatjournal.repository.ChatJournalEntryRepository;
+import com.callibrity.ai.chatjournal.summary.ChatClientMessageSummarizer;
 import com.callibrity.ai.chatjournal.summary.MessageSummarizer;
 import com.callibrity.ai.chatjournal.token.SimpleTokenUsageCalculator;
 import com.callibrity.ai.chatjournal.token.TokenUsageCalculator;
@@ -33,7 +37,10 @@ import org.springframework.core.task.TaskExecutor;
 
 @AutoConfiguration(
         after = {JdbcAutoConfiguration.class, JTokkitAutoConfiguration.class},
-        afterName = "org.springframework.ai.model.chat.client.autoconfigure.ChatClientAutoConfiguration",
+        afterName = {
+                "org.springframework.ai.model.chat.client.autoconfigure.ChatClientAutoConfiguration",
+                "org.springframework.boot.autoconfigure.task.TaskExecutionAutoConfiguration"
+        },
         beforeName = "org.springframework.ai.model.chat.memory.autoconfigure.ChatMemoryAutoConfiguration"
 )
 @EnableConfigurationProperties(ChatJournalProperties.class)
@@ -54,21 +61,68 @@ public class ChatJournalAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnBean({ChatJournalEntryRepository.class, MessageSummarizer.class})
-    public ChatMemory chatJournalChatMemory(
-            ChatJournalEntryRepository repository,
-            TokenUsageCalculator tokenUsageCalculator,
+    @ConditionalOnBean(ObjectMapper.class)
+    public ChatJournalEntryMapper chatJournalEntryMapper(
             ObjectMapper objectMapper,
-            MessageSummarizer messageSummarizer,
-            ChatJournalProperties properties,
-            TaskExecutor taskExecutor) {
-        return new ChatJournalChatMemory(
-                repository,
-                tokenUsageCalculator,
-                objectMapper,
-                messageSummarizer,
+            TokenUsageCalculator tokenUsageCalculator) {
+        return new ChatJournalEntryMapper(objectMapper, tokenUsageCalculator);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean(MessageSummarizer.class)
+    public ChatJournalCheckpointFactory chatJournalCheckpointFactory(
+            MessageSummarizer summarizer,
+            TokenUsageCalculator tokenUsageCalculator) {
+        return new ChatJournalCheckpointFactory(summarizer, tokenUsageCalculator);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean(value = {
+            ChatJournalEntryRepository.class,
+            ChatJournalCheckpointRepository.class,
+            ChatJournalCheckpointFactory.class,
+            ChatJournalEntryMapper.class
+    })
+    public ChatJournalCheckpointer chatJournalCheckpointer(
+            ChatJournalEntryRepository entryRepository,
+            ChatJournalCheckpointRepository checkpointRepository,
+            ChatJournalCheckpointFactory checkpointFactory,
+            ChatJournalEntryMapper entryMapper,
+            ChatJournalProperties properties) {
+        return new ChatJournalCheckpointer(
+                entryRepository,
+                checkpointRepository,
+                checkpointFactory,
+                entryMapper,
                 properties.getMaxTokens(),
-                taskExecutor
+                properties.getMinRetainedEntries()
+        );
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean(value = {
+            ChatJournalEntryRepository.class,
+            ChatJournalCheckpointRepository.class,
+            ChatJournalCheckpointer.class,
+            TaskExecutor.class
+    })
+    public ChatMemory chatJournalChatMemory(
+            ChatJournalEntryRepository entryRepository,
+            ChatJournalCheckpointRepository checkpointRepository,
+            ChatJournalEntryMapper entryMapper,
+            ChatJournalCheckpointer checkpointer,
+            TaskExecutor taskExecutor,
+            ChatJournalProperties properties) {
+        return new ChatJournalChatMemory(
+                entryRepository,
+                checkpointRepository,
+                entryMapper,
+                checkpointer,
+                taskExecutor,
+                properties.getMaxEntries()
         );
     }
 }

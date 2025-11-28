@@ -15,11 +15,10 @@
  */
 package com.callibrity.ai.chatjournal.memory;
 
+import com.callibrity.ai.chatjournal.repository.ChatJournalCheckpoint;
+import com.callibrity.ai.chatjournal.repository.ChatJournalCheckpointRepository;
 import com.callibrity.ai.chatjournal.repository.ChatJournalEntry;
 import com.callibrity.ai.chatjournal.repository.ChatJournalEntryRepository;
-import com.callibrity.ai.chatjournal.summary.MessageSummarizer;
-import com.callibrity.ai.chatjournal.token.TokenUsageCalculator;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -37,22 +36,16 @@ import org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.core.task.SyncTaskExecutor;
 import org.springframework.core.task.TaskExecutor;
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -60,36 +53,36 @@ import static org.mockito.Mockito.when;
 class ChatJournalChatMemoryTest {
 
     private static final String CONVERSATION_ID = "test-conversation";
-    private static final int MAX_TOKENS = 1000;
+    private static final int MAX_ENTRIES = 100;
 
     @Mock
-    private ChatJournalEntryRepository repository;
+    private ChatJournalEntryRepository entryRepository;
 
     @Mock
-    private TokenUsageCalculator tokenUsageCalculator;
+    private ChatJournalCheckpointRepository checkpointRepository;
 
     @Mock
-    private MessageSummarizer summarizer;
+    private ChatJournalEntryMapper entryMapper;
 
-    private final TaskExecutor taskExecutor = new SyncTaskExecutor();
+    @Mock
+    private ChatJournalCheckpointer checkpointer;
 
     @Captor
     private ArgumentCaptor<List<ChatJournalEntry>> entriesCaptor;
 
-    @Captor
-    private ArgumentCaptor<ChatJournalEntry> summaryEntryCaptor;
-
+    private TaskExecutor taskExecutor;
     private ChatJournalChatMemory chatMemory;
 
     @BeforeEach
     void setUp() {
+        taskExecutor = new SyncTaskExecutor();
         chatMemory = new ChatJournalChatMemory(
-                repository,
-                tokenUsageCalculator,
-                new ObjectMapper(),
-                summarizer,
-                MAX_TOKENS,
-                taskExecutor
+                entryRepository,
+                checkpointRepository,
+                entryMapper,
+                checkpointer,
+                taskExecutor,
+                MAX_ENTRIES
         );
     }
 
@@ -98,17 +91,23 @@ class ChatJournalChatMemoryTest {
 
         @Test
         void shouldSaveEntriesToRepository() {
-            when(tokenUsageCalculator.calculateTokenUsage(anyList())).thenReturn(100);
-            when(repository.getTotalTokens(CONVERSATION_ID)).thenReturn(500);
+            when(entryRepository.findAll(CONVERSATION_ID)).thenReturn(List.of());
+            when(checkpointer.requiresCheckpoint(CONVERSATION_ID)).thenReturn(false);
 
             List<Message> messages = List.of(
                     new UserMessage("Hello"),
                     new AssistantMessage("Hi there!")
             );
 
+            List<ChatJournalEntry> entries = List.of(
+                    new ChatJournalEntry(0, MessageType.USER.name(), "Hello", 10),
+                    new ChatJournalEntry(0, MessageType.ASSISTANT.name(), "Hi there!", 15)
+            );
+            when(entryMapper.toEntries(messages)).thenReturn(entries);
+
             chatMemory.add(CONVERSATION_ID, messages);
 
-            verify(repository).save(eq(CONVERSATION_ID), entriesCaptor.capture());
+            verify(entryRepository).save(eq(CONVERSATION_ID), entriesCaptor.capture());
             List<ChatJournalEntry> savedEntries = entriesCaptor.getValue();
 
             assertThat(savedEntries).hasSize(2);
@@ -119,29 +118,38 @@ class ChatJournalChatMemoryTest {
         }
 
         @Test
-        void shouldNotTriggerCompactionWhenTokensBelowMax() {
-            when(tokenUsageCalculator.calculateTokenUsage(anyList())).thenReturn(100);
-            when(repository.getTotalTokens(CONVERSATION_ID)).thenReturn(500);
+        void shouldTriggerCheckpointingWhenRequired() {
+            when(entryRepository.findAll(CONVERSATION_ID)).thenReturn(List.of());
+            when(checkpointer.requiresCheckpoint(CONVERSATION_ID)).thenReturn(true);
+            when(entryMapper.toEntries(any())).thenReturn(List.of());
 
             chatMemory.add(CONVERSATION_ID, List.of(new UserMessage("Hello")));
 
-            verify(repository, never()).findEntriesForCompaction(anyString());
+            verify(checkpointer).checkpoint(CONVERSATION_ID);
         }
 
         @Test
-        void shouldTriggerCompactionWhenTokensExceedMax() {
-            when(tokenUsageCalculator.calculateTokenUsage(anyList())).thenReturn(100);
-            when(repository.getTotalTokens(CONVERSATION_ID)).thenReturn(MAX_TOKENS + 1);
-            when(repository.findEntriesForCompaction(CONVERSATION_ID)).thenReturn(List.of(
-                    new ChatJournalEntry(1, MessageType.USER.name(), "Old message", 50)
-            ));
-            when(summarizer.summarize(anyList())).thenReturn("Summary of old messages");
+        void shouldRejectMessagesWhenMaxEntriesExceeded() {
+            when(entryRepository.findAll(CONVERSATION_ID)).thenReturn(
+                    List.of(new ChatJournalEntry(1, "USER", "Existing", 10))
+            );
 
-            chatMemory.add(CONVERSATION_ID, List.of(new UserMessage("Hello")));
+            ChatJournalChatMemory smallMemory = new ChatJournalChatMemory(
+                    entryRepository,
+                    checkpointRepository,
+                    entryMapper,
+                    checkpointer,
+                    taskExecutor,
+                    2  // maxEntries = 2
+            );
 
-            verify(repository).findEntriesForCompaction(CONVERSATION_ID);
-            verify(summarizer).summarize(anyList());
-            verify(repository).replaceEntriesWithSummary(eq(CONVERSATION_ID), any(ChatJournalEntry.class));
+            assertThatIllegalStateException()
+                    .isThrownBy(() -> smallMemory.add(CONVERSATION_ID, List.of(
+                            new UserMessage("New 1"),
+                            new AssistantMessage("New 2")
+                    )))
+                    .withMessageContaining("Cannot add 2 messages")
+                    .withMessageContaining("would exceed maximum of 2");
         }
     }
 
@@ -149,27 +157,60 @@ class ChatJournalChatMemoryTest {
     class Get {
 
         @Test
-        void shouldRetrieveAndConvertMessages() {
-            when(repository.findAll(CONVERSATION_ID)).thenReturn(List.of(
+        void shouldRetrieveMessagesWithoutCheckpoint() {
+            when(checkpointRepository.findCheckpoint(CONVERSATION_ID)).thenReturn(Optional.empty());
+            List<ChatJournalEntry> entries = List.of(
                     new ChatJournalEntry(1, MessageType.USER.name(), "Hello", 10),
-                    new ChatJournalEntry(2, MessageType.ASSISTANT.name(), "Hi!", 10),
-                    new ChatJournalEntry(3, MessageType.SYSTEM.name(), "System prompt", 20)
-            ));
+                    new ChatJournalEntry(2, MessageType.ASSISTANT.name(), "Hi!", 10)
+            );
+            when(entryRepository.findAll(CONVERSATION_ID)).thenReturn(entries);
+
+            List<Message> expectedMessages = List.of(
+                    new UserMessage("Hello"),
+                    new AssistantMessage("Hi!")
+            );
+            when(entryMapper.toMessages(entries)).thenReturn(expectedMessages);
 
             List<Message> messages = chatMemory.get(CONVERSATION_ID);
 
-            assertThat(messages).hasSize(3);
+            assertThat(messages).hasSize(2);
             assertThat(messages.get(0)).isInstanceOf(UserMessage.class);
             assertThat(messages.get(0).getText()).isEqualTo("Hello");
             assertThat(messages.get(1)).isInstanceOf(AssistantMessage.class);
             assertThat(messages.get(1).getText()).isEqualTo("Hi!");
-            assertThat(messages.get(2)).isInstanceOf(SystemMessage.class);
-            assertThat(messages.get(2).getText()).isEqualTo("System prompt");
+        }
+
+        @Test
+        void shouldIncludeCheckpointSummaryAsSystemMessage() {
+            ChatJournalCheckpoint checkpoint = new ChatJournalCheckpoint(10, "Previous conversation summary", 50);
+            when(checkpointRepository.findCheckpoint(CONVERSATION_ID)).thenReturn(Optional.of(checkpoint));
+
+            List<ChatJournalEntry> entries = List.of(
+                    new ChatJournalEntry(11, MessageType.USER.name(), "Hello", 10),
+                    new ChatJournalEntry(12, MessageType.ASSISTANT.name(), "Hi!", 10)
+            );
+            when(entryRepository.findEntriesAfterIndex(CONVERSATION_ID, 10)).thenReturn(entries);
+
+            List<Message> expectedMessages = List.of(
+                    new UserMessage("Hello"),
+                    new AssistantMessage("Hi!")
+            );
+            when(entryMapper.toMessages(entries)).thenReturn(expectedMessages);
+
+            List<Message> messages = chatMemory.get(CONVERSATION_ID);
+
+            assertThat(messages).hasSize(3);
+            assertThat(messages.get(0)).isInstanceOf(SystemMessage.class);
+            assertThat(messages.get(0).getText()).contains("Previous conversation summary");
+            assertThat(messages.get(1)).isInstanceOf(UserMessage.class);
+            assertThat(messages.get(2)).isInstanceOf(AssistantMessage.class);
         }
 
         @Test
         void shouldReturnEmptyListWhenNoMessages() {
-            when(repository.findAll(CONVERSATION_ID)).thenReturn(List.of());
+            when(checkpointRepository.findCheckpoint(CONVERSATION_ID)).thenReturn(Optional.empty());
+            when(entryRepository.findAll(CONVERSATION_ID)).thenReturn(List.of());
+            when(entryMapper.toMessages(List.of())).thenReturn(List.of());
 
             List<Message> messages = chatMemory.get(CONVERSATION_ID);
 
@@ -181,67 +222,11 @@ class ChatJournalChatMemoryTest {
     class Clear {
 
         @Test
-        void shouldDelegateToRepository() {
+        void shouldDeleteCheckpointAndEntries() {
             chatMemory.clear(CONVERSATION_ID);
 
-            verify(repository).deleteAll(CONVERSATION_ID);
-        }
-    }
-
-    @Nested
-    class Compaction {
-
-        @BeforeEach
-        void setUp() {
-            when(tokenUsageCalculator.calculateTokenUsage(anyList())).thenReturn(100);
-            when(repository.getTotalTokens(CONVERSATION_ID)).thenReturn(MAX_TOKENS + 1);
-        }
-
-        @Test
-        void shouldCreateSummaryEntryWithCorrectMessageIndex() {
-            when(repository.findEntriesForCompaction(CONVERSATION_ID)).thenReturn(List.of(
-                    new ChatJournalEntry(5, MessageType.USER.name(), "Message 1", 50),
-                    new ChatJournalEntry(3, MessageType.ASSISTANT.name(), "Message 2", 50)
-            ));
-            when(summarizer.summarize(anyList())).thenReturn("Summarized content");
-
-            chatMemory.add(CONVERSATION_ID, List.of(new UserMessage("Trigger")));
-
-            verify(repository).replaceEntriesWithSummary(eq(CONVERSATION_ID), summaryEntryCaptor.capture());
-            ChatJournalEntry summaryEntry = summaryEntryCaptor.getValue();
-
-            assertThat(summaryEntry.messageIndex()).isEqualTo(5);
-            assertThat(summaryEntry.messageType()).isEqualTo(MessageType.SYSTEM.name());
-            assertThat(summaryEntry.content()).startsWith("Summary of previous conversation:");
-        }
-
-        @Test
-        void shouldNotCompactWhenNoEntriesAvailable() {
-            when(repository.findEntriesForCompaction(CONVERSATION_ID)).thenReturn(List.of());
-
-            chatMemory.add(CONVERSATION_ID, List.of(new UserMessage("Trigger")));
-
-            verify(repository, never()).replaceEntriesWithSummary(anyString(), any());
-            verify(summarizer, never()).summarize(anyList());
-        }
-
-        @Test
-        void shouldPassMessagesInCorrectOrderToSummarizer() {
-            when(repository.findEntriesForCompaction(CONVERSATION_ID)).thenReturn(List.of(
-                    new ChatJournalEntry(3, MessageType.ASSISTANT.name(), "Response", 50),
-                    new ChatJournalEntry(2, MessageType.USER.name(), "Question", 50)
-            ));
-
-            ArgumentCaptor<List<Message>> messagesCaptor = ArgumentCaptor.captor();
-            when(summarizer.summarize(messagesCaptor.capture())).thenReturn("Summary");
-
-            chatMemory.add(CONVERSATION_ID, List.of(new UserMessage("Trigger")));
-
-            List<Message> passedMessages = messagesCaptor.getValue();
-            assertThat(passedMessages).hasSize(2);
-            // Should be reversed (chronological order)
-            assertThat(passedMessages.get(0).getText()).isEqualTo("Question");
-            assertThat(passedMessages.get(1).getText()).isEqualTo("Response");
+            verify(checkpointRepository).deleteCheckpoint(CONVERSATION_ID);
+            verify(entryRepository).deleteAll(CONVERSATION_ID);
         }
     }
 
@@ -250,8 +235,8 @@ class ChatJournalChatMemoryTest {
 
         @Test
         void shouldSerializeToolResponseMessageWhenAdding() {
-            when(tokenUsageCalculator.calculateTokenUsage(anyList())).thenReturn(100);
-            when(repository.getTotalTokens(CONVERSATION_ID)).thenReturn(500);
+            when(entryRepository.findAll(CONVERSATION_ID)).thenReturn(List.of());
+            when(checkpointer.requiresCheckpoint(CONVERSATION_ID)).thenReturn(false);
 
             ToolResponseMessage toolMessage = ToolResponseMessage.builder()
                     .responses(List.of(
@@ -259,26 +244,31 @@ class ChatJournalChatMemoryTest {
                     ))
                     .build();
 
+            ChatJournalEntry toolEntry = new ChatJournalEntry(0, MessageType.TOOL.name(),
+                    "[{\"id\":\"tool-1\",\"name\":\"tool-name\",\"responseData\":\"Tool result data\"}]", 50);
+            when(entryMapper.toEntries(List.of(toolMessage))).thenReturn(List.of(toolEntry));
+
             chatMemory.add(CONVERSATION_ID, List.of(toolMessage));
 
-            verify(repository).save(eq(CONVERSATION_ID), entriesCaptor.capture());
+            verify(entryRepository).save(eq(CONVERSATION_ID), entriesCaptor.capture());
             ChatJournalEntry savedEntry = entriesCaptor.getValue().getFirst();
 
             assertThat(savedEntry.messageType()).isEqualTo(MessageType.TOOL.name());
             assertThat(savedEntry.content()).contains("tool-1");
-            assertThat(savedEntry.content()).contains("tool-name");
-            assertThat(savedEntry.content()).contains("Tool result data");
         }
 
         @Test
         void shouldDeserializeToolResponseMessageWhenGetting() {
-            String serializedToolResponse = """
-                    [{"id":"tool-1","name":"calculator","responseData":"42"}]
-                    """;
+            when(checkpointRepository.findCheckpoint(CONVERSATION_ID)).thenReturn(Optional.empty());
 
-            when(repository.findAll(CONVERSATION_ID)).thenReturn(List.of(
-                    new ChatJournalEntry(1, MessageType.TOOL.name(), serializedToolResponse, 50)
-            ));
+            ChatJournalEntry toolEntry = new ChatJournalEntry(1, MessageType.TOOL.name(),
+                    "[{\"id\":\"tool-1\",\"name\":\"calculator\",\"responseData\":\"42\"}]", 50);
+            when(entryRepository.findAll(CONVERSATION_ID)).thenReturn(List.of(toolEntry));
+
+            ToolResponseMessage expectedToolMessage = ToolResponseMessage.builder()
+                    .responses(List.of(new ToolResponse("tool-1", "calculator", "42")))
+                    .build();
+            when(entryMapper.toMessages(List.of(toolEntry))).thenReturn(List.of(expectedToolMessage));
 
             List<Message> messages = chatMemory.get(CONVERSATION_ID);
 
@@ -293,193 +283,107 @@ class ChatJournalChatMemoryTest {
             assertThat(responses.getFirst().name()).isEqualTo("calculator");
             assertThat(responses.getFirst().responseData()).isEqualTo("42");
         }
-
-        @Test
-        void shouldHandleMultipleToolResponses() {
-            when(tokenUsageCalculator.calculateTokenUsage(anyList())).thenReturn(100);
-            when(repository.getTotalTokens(CONVERSATION_ID)).thenReturn(500);
-
-            ToolResponseMessage toolMessage = ToolResponseMessage.builder()
-                    .responses(List.of(
-                            new ToolResponse("tool-1", "search", "Result 1"),
-                            new ToolResponse("tool-2", "calculator", "42")
-                    ))
-                    .build();
-
-            chatMemory.add(CONVERSATION_ID, List.of(toolMessage));
-
-            verify(repository).save(eq(CONVERSATION_ID), entriesCaptor.capture());
-            String content = entriesCaptor.getValue().getFirst().content();
-
-            assertThat(content)
-                    .contains("tool-1")
-                    .contains("tool-2")
-                    .contains("search")
-                    .contains("calculator");
-        }
-
-        @Test
-        void shouldRoundTripToolResponseMessage() {
-            when(tokenUsageCalculator.calculateTokenUsage(anyList())).thenReturn(100);
-            when(repository.getTotalTokens(CONVERSATION_ID)).thenReturn(500);
-
-            ToolResponseMessage originalMessage = ToolResponseMessage.builder()
-                    .responses(List.of(
-                            new ToolResponse("abc-123", "weather", "Sunny, 72°F")
-                    ))
-                    .build();
-
-            // Add the message
-            chatMemory.add(CONVERSATION_ID, List.of(originalMessage));
-
-            // Capture what was saved
-            verify(repository).save(eq(CONVERSATION_ID), entriesCaptor.capture());
-            ChatJournalEntry savedEntry = entriesCaptor.getValue().getFirst();
-
-            // Mock repository to return the saved entry
-            when(repository.findAll(CONVERSATION_ID)).thenReturn(List.of(savedEntry));
-
-            // Get it back
-            List<Message> retrievedMessages = chatMemory.get(CONVERSATION_ID);
-
-            assertThat(retrievedMessages).hasSize(1);
-            ToolResponseMessage retrievedMessage = (ToolResponseMessage) retrievedMessages.getFirst();
-            ToolResponse response = retrievedMessage.getResponses().getFirst();
-
-            assertThat(response.id()).isEqualTo("abc-123");
-            assertThat(response.name()).isEqualTo("weather");
-            assertThat(response.responseData()).isEqualTo("Sunny, 72°F");
-        }
     }
 
     @Nested
     class ConstructorValidation {
 
         @Test
-        void shouldRejectNullRepository() {
+        void shouldRejectNullEntryRepository() {
             assertThatNullPointerException()
                     .isThrownBy(() -> new ChatJournalChatMemory(
                             null,
-                            tokenUsageCalculator,
-                            new ObjectMapper(),
-                            summarizer,
-                            MAX_TOKENS,
-                            taskExecutor
+                            checkpointRepository,
+                            entryMapper,
+                            checkpointer,
+                            taskExecutor,
+                            MAX_ENTRIES
                     ))
-                    .withMessage("repository must not be null");
+                    .withMessage("entryRepository must not be null");
         }
 
         @Test
-        void shouldRejectNullTokenUsageCalculator() {
+        void shouldRejectNullCheckpointRepository() {
             assertThatNullPointerException()
                     .isThrownBy(() -> new ChatJournalChatMemory(
-                            repository,
+                            entryRepository,
                             null,
-                            new ObjectMapper(),
-                            summarizer,
-                            MAX_TOKENS,
-                            taskExecutor
+                            entryMapper,
+                            checkpointer,
+                            taskExecutor,
+                            MAX_ENTRIES
                     ))
-                    .withMessage("tokenUsageCalculator must not be null");
+                    .withMessage("checkpointRepository must not be null");
         }
 
         @Test
-        void shouldRejectNullObjectMapper() {
+        void shouldRejectNullEntryMapper() {
             assertThatNullPointerException()
                     .isThrownBy(() -> new ChatJournalChatMemory(
-                            repository,
-                            tokenUsageCalculator,
+                            entryRepository,
+                            checkpointRepository,
                             null,
-                            summarizer,
-                            MAX_TOKENS,
-                            taskExecutor
+                            checkpointer,
+                            taskExecutor,
+                            MAX_ENTRIES
                     ))
-                    .withMessage("objectMapper must not be null");
+                    .withMessage("entryMapper must not be null");
         }
 
         @Test
-        void shouldRejectNullSummarizer() {
+        void shouldRejectNullCheckpointer() {
             assertThatNullPointerException()
                     .isThrownBy(() -> new ChatJournalChatMemory(
-                            repository,
-                            tokenUsageCalculator,
-                            new ObjectMapper(),
+                            entryRepository,
+                            checkpointRepository,
+                            entryMapper,
                             null,
-                            MAX_TOKENS,
-                            taskExecutor
+                            taskExecutor,
+                            MAX_ENTRIES
                     ))
-                    .withMessage("summarizer must not be null");
+                    .withMessage("checkpointer must not be null");
         }
 
         @Test
-        void shouldRejectNullCompactionExecutor() {
+        void shouldRejectNullTaskExecutor() {
             assertThatNullPointerException()
                     .isThrownBy(() -> new ChatJournalChatMemory(
-                            repository,
-                            tokenUsageCalculator,
-                            new ObjectMapper(),
-                            summarizer,
-                            MAX_TOKENS,
-                            null
+                            entryRepository,
+                            checkpointRepository,
+                            entryMapper,
+                            checkpointer,
+                            null,
+                            MAX_ENTRIES
                     ))
-                    .withMessage("compactionExecutor must not be null");
+                    .withMessage("taskExecutor must not be null");
         }
 
         @Test
-        void shouldRejectZeroMaxTokens() {
+        void shouldRejectZeroMaxEntries() {
             assertThatIllegalArgumentException()
                     .isThrownBy(() -> new ChatJournalChatMemory(
-                            repository,
-                            tokenUsageCalculator,
-                            new ObjectMapper(),
-                            summarizer,
-                            0,
-                            taskExecutor
+                            entryRepository,
+                            checkpointRepository,
+                            entryMapper,
+                            checkpointer,
+                            taskExecutor,
+                            0
                     ))
-                    .withMessage("maxTokens must be positive");
+                    .withMessage("maxEntries must be positive");
         }
 
         @Test
-        void shouldRejectNegativeMaxTokens() {
+        void shouldRejectNegativeMaxEntries() {
             assertThatIllegalArgumentException()
                     .isThrownBy(() -> new ChatJournalChatMemory(
-                            repository,
-                            tokenUsageCalculator,
-                            new ObjectMapper(),
-                            summarizer,
-                            -100,
-                            taskExecutor
+                            entryRepository,
+                            checkpointRepository,
+                            entryMapper,
+                            checkpointer,
+                            taskExecutor,
+                            -100
                     ))
-                    .withMessage("maxTokens must be positive");
-        }
-
-        @Test
-        void shouldWarnWhenMaxTokensBelowRecommendedMinimum() {
-            Logger logger = (Logger) LoggerFactory.getLogger(ChatJournalChatMemory.class);
-            ListAppender<ILoggingEvent> listAppender = new ListAppender<>();
-            listAppender.start();
-            logger.addAppender(listAppender);
-
-            try {
-                new ChatJournalChatMemory(
-                        repository,
-                        tokenUsageCalculator,
-                        new ObjectMapper(),
-                        summarizer,
-                        100,
-                        taskExecutor
-                );
-
-                assertThat(listAppender.list)
-                        .filteredOn(event -> event.getLevel() == Level.WARN)
-                        .hasSize(1)
-                        .first()
-                        .extracting(ILoggingEvent::getFormattedMessage)
-                        .asString()
-                        .contains("maxTokens (100) is below the recommended minimum of 500");
-            } finally {
-                logger.detachAppender(listAppender);
-            }
+                    .withMessage("maxEntries must be positive");
         }
     }
 
@@ -554,8 +458,9 @@ class ChatJournalChatMemoryTest {
     class GetMemoryUsage {
 
         @Test
-        void shouldReturnCurrentTokensFromRepository() {
-            when(repository.getTotalTokens(CONVERSATION_ID)).thenReturn(500);
+        void shouldReturnCurrentTokensFromCheckpointer() {
+            when(checkpointer.getTotalTokens(CONVERSATION_ID)).thenReturn(500);
+            when(checkpointer.maxTokens()).thenReturn(1000);
 
             ChatMemoryUsage usage = chatMemory.getMemoryUsage(CONVERSATION_ID);
 
@@ -563,12 +468,13 @@ class ChatJournalChatMemoryTest {
         }
 
         @Test
-        void shouldReturnMaxTokensFromConfiguration() {
-            when(repository.getTotalTokens(CONVERSATION_ID)).thenReturn(500);
+        void shouldReturnMaxTokensFromCheckpointer() {
+            when(checkpointer.getTotalTokens(CONVERSATION_ID)).thenReturn(500);
+            when(checkpointer.maxTokens()).thenReturn(1000);
 
             ChatMemoryUsage usage = chatMemory.getMemoryUsage(CONVERSATION_ID);
 
-            assertThat(usage.maxTokens()).isEqualTo(MAX_TOKENS);
+            assertThat(usage.maxTokens()).isEqualTo(1000);
         }
     }
 }

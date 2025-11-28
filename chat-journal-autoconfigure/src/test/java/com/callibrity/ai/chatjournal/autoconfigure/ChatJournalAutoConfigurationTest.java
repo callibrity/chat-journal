@@ -16,6 +16,10 @@
 package com.callibrity.ai.chatjournal.autoconfigure;
 
 import com.callibrity.ai.chatjournal.memory.ChatJournalChatMemory;
+import com.callibrity.ai.chatjournal.memory.ChatJournalCheckpointFactory;
+import com.callibrity.ai.chatjournal.memory.ChatJournalCheckpointer;
+import com.callibrity.ai.chatjournal.memory.ChatJournalEntryMapper;
+import com.callibrity.ai.chatjournal.repository.ChatJournalCheckpointRepository;
 import com.callibrity.ai.chatjournal.repository.ChatJournalEntryRepository;
 import com.callibrity.ai.chatjournal.summary.ChatClientMessageSummarizer;
 import com.callibrity.ai.chatjournal.summary.MessageSummarizer;
@@ -27,10 +31,10 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
-import org.springframework.boot.autoconfigure.task.TaskExecutionAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.task.TaskExecutor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -41,8 +45,7 @@ class ChatJournalAutoConfigurationTest {
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
                     ChatJournalAutoConfiguration.class,
-                    JacksonAutoConfiguration.class,
-                    TaskExecutionAutoConfiguration.class
+                    JacksonAutoConfiguration.class
             ));
 
     @Test
@@ -95,11 +98,58 @@ class ChatJournalAutoConfigurationTest {
     }
 
     @Test
+    void shouldCreateEntryMapper() {
+        contextRunner
+                .withUserConfiguration(ObjectMapperConfig.class)
+                .run(context -> {
+                    assertThat(context).hasSingleBean(ChatJournalEntryMapper.class);
+                });
+    }
+
+    @Test
+    void shouldCreateCheckpointFactoryWhenMessageSummarizerExists() {
+        contextRunner
+                .withUserConfiguration(ChatClientBuilderConfig.class)
+                .run(context -> {
+                    assertThat(context).hasSingleBean(ChatJournalCheckpointFactory.class);
+                });
+    }
+
+    @Test
+    void shouldNotCreateCheckpointFactoryWhenMessageSummarizerMissing() {
+        contextRunner.run(context -> {
+            assertThat(context).doesNotHaveBean(ChatJournalCheckpointFactory.class);
+        });
+    }
+
+    @Test
+    void shouldCreateCheckpointerWhenAllDependenciesExist() {
+        contextRunner
+                .withUserConfiguration(
+                        ChatClientBuilderConfig.class,
+                        RepositoriesConfig.class,
+                        ObjectMapperConfig.class
+                )
+                .run(context -> {
+                    assertThat(context).hasSingleBean(ChatJournalCheckpointer.class);
+                });
+    }
+
+    @Test
+    void shouldNotCreateCheckpointerWhenRepositoriesMissing() {
+        contextRunner
+                .withUserConfiguration(ChatClientBuilderConfig.class)
+                .run(context -> {
+                    assertThat(context).doesNotHaveBean(ChatJournalCheckpointer.class);
+                });
+    }
+
+    @Test
     void shouldCreateChatJournalChatMemoryWhenAllDependenciesExist() {
         contextRunner
                 .withUserConfiguration(
                         ChatClientBuilderConfig.class,
-                        ChatJournalEntryRepositoryConfig.class,
+                        RepositoriesConfig.class,
                         ObjectMapperConfig.class
                 )
                 .run(context -> {
@@ -110,7 +160,7 @@ class ChatJournalAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotCreateChatMemoryWhenRepositoryMissing() {
+    void shouldNotCreateChatMemoryWhenRepositoriesMissing() {
         contextRunner
                 .withUserConfiguration(ChatClientBuilderConfig.class)
                 .run(context -> {
@@ -121,7 +171,7 @@ class ChatJournalAutoConfigurationTest {
     @Test
     void shouldNotCreateChatMemoryWhenMessageSummarizerMissing() {
         contextRunner
-                .withUserConfiguration(ChatJournalEntryRepositoryConfig.class)
+                .withUserConfiguration(RepositoriesConfig.class)
                 .run(context -> {
                     assertThat(context).doesNotHaveBean(ChatMemory.class);
                 });
@@ -164,10 +214,20 @@ class ChatJournalAutoConfigurationTest {
     }
 
     @Configuration
-    static class ChatJournalEntryRepositoryConfig {
+    static class RepositoriesConfig {
         @Bean
         public ChatJournalEntryRepository chatJournalEntryRepository() {
             return mock(ChatJournalEntryRepository.class);
+        }
+
+        @Bean
+        public ChatJournalCheckpointRepository chatJournalCheckpointRepository() {
+            return mock(ChatJournalCheckpointRepository.class);
+        }
+
+        @Bean
+        public TaskExecutor taskExecutor() {
+            return mock(TaskExecutor.class);
         }
     }
 

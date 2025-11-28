@@ -15,7 +15,9 @@
  */
 package com.callibrity.ai.chatjournal.autoconfigure;
 
+import com.callibrity.ai.chatjournal.jdbc.JdbcChatJournalCheckpointRepository;
 import com.callibrity.ai.chatjournal.jdbc.JdbcChatJournalEntryRepository;
+import com.callibrity.ai.chatjournal.repository.ChatJournalCheckpointRepository;
 import com.callibrity.ai.chatjournal.repository.ChatJournalEntryRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -49,20 +51,43 @@ class JdbcAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotCreateRepositoryWhenJdbcTemplateIsMissing() {
+    void shouldCreateJdbcChatJournalCheckpointRepositoryWhenJdbcTemplateExists() {
+        contextRunner
+                .withUserConfiguration(DataSourceConfig.class)
+                .run(context -> {
+                    assertThat(context).hasSingleBean(ChatJournalCheckpointRepository.class);
+                    assertThat(context.getBean(ChatJournalCheckpointRepository.class))
+                            .isInstanceOf(JdbcChatJournalCheckpointRepository.class);
+                });
+    }
+
+    @Test
+    void shouldNotCreateRepositoriesWhenJdbcTemplateIsMissing() {
         contextRunner.run(context -> {
             assertThat(context).doesNotHaveBean(ChatJournalEntryRepository.class);
+            assertThat(context).doesNotHaveBean(ChatJournalCheckpointRepository.class);
         });
     }
 
     @Test
-    void shouldNotCreateRepositoryWhenCustomBeanExists() {
+    void shouldNotCreateEntryRepositoryWhenCustomBeanExists() {
         contextRunner
-                .withUserConfiguration(DataSourceConfig.class, CustomRepositoryConfig.class)
+                .withUserConfiguration(DataSourceConfig.class, CustomEntryRepositoryConfig.class)
                 .run(context -> {
                     assertThat(context).hasSingleBean(ChatJournalEntryRepository.class);
                     assertThat(context.getBean(ChatJournalEntryRepository.class))
                             .isNotInstanceOf(JdbcChatJournalEntryRepository.class);
+                });
+    }
+
+    @Test
+    void shouldNotCreateCheckpointRepositoryWhenCustomBeanExists() {
+        contextRunner
+                .withUserConfiguration(DataSourceConfig.class, CustomCheckpointRepositoryConfig.class)
+                .run(context -> {
+                    assertThat(context).hasSingleBean(ChatJournalCheckpointRepository.class);
+                    assertThat(context.getBean(ChatJournalCheckpointRepository.class))
+                            .isNotInstanceOf(JdbcChatJournalCheckpointRepository.class);
                 });
     }
 
@@ -87,10 +112,18 @@ class JdbcAutoConfigurationTest {
     }
 
     @Configuration
-    static class CustomRepositoryConfig {
+    static class CustomEntryRepositoryConfig {
         @Bean
         public ChatJournalEntryRepository chatJournalEntryRepository() {
             return mock(ChatJournalEntryRepository.class);
+        }
+    }
+
+    @Configuration
+    static class CustomCheckpointRepositoryConfig {
+        @Bean
+        public ChatJournalCheckpointRepository chatJournalCheckpointRepository() {
+            return mock(ChatJournalCheckpointRepository.class);
         }
     }
 }

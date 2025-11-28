@@ -15,8 +15,10 @@
  */
 package com.callibrity.ai.chatjournal.autoconfigure;
 
-import com.callibrity.ai.chatjournal.repository.ChatJournalEntryRepository;
+import com.callibrity.ai.chatjournal.jdbc.JdbcChatJournalCheckpointRepository;
 import com.callibrity.ai.chatjournal.jdbc.JdbcChatJournalEntryRepository;
+import com.callibrity.ai.chatjournal.repository.ChatJournalCheckpointRepository;
+import com.callibrity.ai.chatjournal.repository.ChatJournalEntryRepository;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -34,9 +36,14 @@ public class JdbcAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnBean(JdbcTemplate.class)
-    public ChatJournalEntryRepository jdbcChatJournalEntryRepository(
-            JdbcTemplate jdbcTemplate,
-            ChatJournalProperties properties) {
-        return new JdbcChatJournalEntryRepository(jdbcTemplate, properties.getMinRetainedEntries());
+    public ChatJournalEntryRepository jdbcChatJournalEntryRepository(JdbcTemplate jdbcTemplate) {
+        return new JdbcChatJournalEntryRepository(jdbcTemplate);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean(JdbcTemplate.class)
+    public ChatJournalCheckpointRepository jdbcChatJournalCheckpointRepository(JdbcTemplate jdbcTemplate) {
+        return new JdbcChatJournalCheckpointRepository(jdbcTemplate);
     }
 }

@@ -13,8 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.callibrity.ai.chatjournal.repository;
+package com.callibrity.ai.chatjournal.memory;
 
+import com.callibrity.ai.chatjournal.repository.ChatJournalEntry;
 import com.callibrity.ai.chatjournal.token.TokenUsageCalculator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,20 +37,126 @@ import java.io.UncheckedIOException;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
-class ChatJournalEntryTest {
+@ExtendWith(MockitoExtension.class)
+class ChatJournalEntryMapperTest {
+
+    @Mock
+    private TokenUsageCalculator tokenUsageCalculator;
 
     private ObjectMapper objectMapper;
+    private ChatJournalEntryMapper mapper;
 
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
+        lenient().when(tokenUsageCalculator.calculateTokenUsage(anyList())).thenReturn(100);
+        mapper = new ChatJournalEntryMapper(objectMapper, tokenUsageCalculator);
+    }
+
+    @Nested
+    class ToEntry {
+
+        @Test
+        void shouldCreateEntryFromUserMessage() {
+            UserMessage message = new UserMessage("Hello");
+
+            ChatJournalEntry entry = mapper.toEntry(message);
+
+            assertThat(entry.messageIndex()).isZero();
+            assertThat(entry.messageType()).isEqualTo(MessageType.USER.name());
+            assertThat(entry.content()).isEqualTo("Hello");
+            assertThat(entry.tokens()).isEqualTo(100);
+        }
+
+        @Test
+        void shouldCreateEntryFromAssistantMessage() {
+            AssistantMessage message = new AssistantMessage("Hi there!");
+
+            ChatJournalEntry entry = mapper.toEntry(message);
+
+            assertThat(entry.messageType()).isEqualTo(MessageType.ASSISTANT.name());
+            assertThat(entry.content()).isEqualTo("Hi there!");
+        }
+
+        @Test
+        void shouldCreateEntryFromSystemMessage() {
+            SystemMessage message = new SystemMessage("You are helpful");
+
+            ChatJournalEntry entry = mapper.toEntry(message);
+
+            assertThat(entry.messageType()).isEqualTo(MessageType.SYSTEM.name());
+            assertThat(entry.content()).isEqualTo("You are helpful");
+        }
+
+        @Test
+        void shouldSerializeToolResponseMessage() {
+            ToolResponseMessage message = ToolResponseMessage.builder()
+                    .responses(List.of(new ToolResponse("tool-1", "calculator", "42")))
+                    .build();
+
+            ChatJournalEntry entry = mapper.toEntry(message);
+
+            assertThat(entry.messageType()).isEqualTo(MessageType.TOOL.name());
+            assertThat(entry.content()).contains("tool-1");
+            assertThat(entry.content()).contains("calculator");
+            assertThat(entry.content()).contains("42");
+        }
+
+        @Test
+        void shouldThrowUncheckedIOExceptionWhenSerializationFails() throws JsonProcessingException {
+            ObjectMapper failingMapper = org.mockito.Mockito.mock(ObjectMapper.class);
+            when(failingMapper.writeValueAsString(any()))
+                    .thenThrow(new JsonProcessingException("Simulated failure") {});
+
+            ChatJournalEntryMapper failingEntryMapper = new ChatJournalEntryMapper(failingMapper, tokenUsageCalculator);
+
+            ToolResponseMessage message = ToolResponseMessage.builder()
+                    .responses(List.of(new ToolResponse("tool-1", "test", "data")))
+                    .build();
+
+            assertThatThrownBy(() -> failingEntryMapper.toEntry(message))
+                    .isInstanceOf(UncheckedIOException.class)
+                    .hasMessageContaining("Failed to serialize tool responses");
+        }
+
+        @Test
+        void shouldRejectNullMessage() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> mapper.toEntry(null))
+                    .withMessage("message must not be null");
+        }
+    }
+
+    @Nested
+    class ToEntries {
+
+        @Test
+        void shouldConvertMultipleMessages() {
+            List<Message> messages = List.of(
+                    new UserMessage("Hello"),
+                    new AssistantMessage("Hi there!")
+            );
+
+            List<ChatJournalEntry> entries = mapper.toEntries(messages);
+
+            assertThat(entries).hasSize(2);
+            assertThat(entries.get(0).messageType()).isEqualTo(MessageType.USER.name());
+            assertThat(entries.get(1).messageType()).isEqualTo(MessageType.ASSISTANT.name());
+        }
+
+        @Test
+        void shouldRejectNullMessages() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> mapper.toEntries(null))
+                    .withMessage("messages must not be null");
+        }
     }
 
     @Nested
@@ -59,7 +166,7 @@ class ChatJournalEntryTest {
         void shouldConvertUserEntry() {
             ChatJournalEntry entry = new ChatJournalEntry(1, MessageType.USER.name(), "Hello", 10);
 
-            Message message = entry.toMessage(objectMapper);
+            Message message = mapper.toMessage(entry);
 
             assertThat(message).isInstanceOf(UserMessage.class);
             assertThat(message.getText()).isEqualTo("Hello");
@@ -69,7 +176,7 @@ class ChatJournalEntryTest {
         void shouldConvertAssistantEntry() {
             ChatJournalEntry entry = new ChatJournalEntry(2, MessageType.ASSISTANT.name(), "Hi there!", 15);
 
-            Message message = entry.toMessage(objectMapper);
+            Message message = mapper.toMessage(entry);
 
             assertThat(message).isInstanceOf(AssistantMessage.class);
             assertThat(message.getText()).isEqualTo("Hi there!");
@@ -79,15 +186,11 @@ class ChatJournalEntryTest {
         void shouldConvertSystemEntry() {
             ChatJournalEntry entry = new ChatJournalEntry(3, MessageType.SYSTEM.name(), "You are a helpful assistant", 20);
 
-            Message message = entry.toMessage(objectMapper);
+            Message message = mapper.toMessage(entry);
 
             assertThat(message).isInstanceOf(SystemMessage.class);
             assertThat(message.getText()).isEqualTo("You are a helpful assistant");
         }
-    }
-
-    @Nested
-    class ToolResponseSerialization {
 
         @Test
         void shouldDeserializeSingleToolResponse() {
@@ -96,7 +199,7 @@ class ChatJournalEntryTest {
                     """;
             ChatJournalEntry entry = new ChatJournalEntry(1, MessageType.TOOL.name(), json, 50);
 
-            Message message = entry.toMessage(objectMapper);
+            Message message = mapper.toMessage(entry);
 
             assertThat(message).isInstanceOf(ToolResponseMessage.class);
             ToolResponseMessage toolMessage = (ToolResponseMessage) message;
@@ -118,7 +221,7 @@ class ChatJournalEntryTest {
                     """;
             ChatJournalEntry entry = new ChatJournalEntry(1, MessageType.TOOL.name(), json, 100);
 
-            Message message = entry.toMessage(objectMapper);
+            Message message = mapper.toMessage(entry);
 
             ToolResponseMessage toolMessage = (ToolResponseMessage) message;
             List<ToolResponse> responses = toolMessage.getResponses();
@@ -135,7 +238,7 @@ class ChatJournalEntryTest {
             String json = "[]";
             ChatJournalEntry entry = new ChatJournalEntry(1, MessageType.TOOL.name(), json, 10);
 
-            Message message = entry.toMessage(objectMapper);
+            Message message = mapper.toMessage(entry);
 
             ToolResponseMessage toolMessage = (ToolResponseMessage) message;
             assertThat(toolMessage.getResponses()).isEmpty();
@@ -148,7 +251,7 @@ class ChatJournalEntryTest {
                     """;
             ChatJournalEntry entry = new ChatJournalEntry(1, MessageType.TOOL.name(), json, 50);
 
-            Message message = entry.toMessage(objectMapper);
+            Message message = mapper.toMessage(entry);
 
             ToolResponseMessage toolMessage = (ToolResponseMessage) message;
             assertThat(toolMessage.getResponses().getFirst().responseData())
@@ -160,7 +263,7 @@ class ChatJournalEntryTest {
             String invalidJson = "not valid json";
             ChatJournalEntry entry = new ChatJournalEntry(1, MessageType.TOOL.name(), invalidJson, 10);
 
-            assertThatThrownBy(() -> entry.toMessage(objectMapper))
+            assertThatThrownBy(() -> mapper.toMessage(entry))
                     .isInstanceOf(UncheckedIOException.class)
                     .hasMessageContaining("Failed to deserialize tool responses");
         }
@@ -170,105 +273,58 @@ class ChatJournalEntryTest {
             String malformedJson = "[{\"id\":\"tool-1\",\"name\":";
             ChatJournalEntry entry = new ChatJournalEntry(1, MessageType.TOOL.name(), malformedJson, 10);
 
-            assertThatThrownBy(() -> entry.toMessage(objectMapper))
+            assertThatThrownBy(() -> mapper.toMessage(entry))
                     .isInstanceOf(UncheckedIOException.class)
                     .hasMessageContaining("Failed to deserialize tool responses");
+        }
+
+        @Test
+        void shouldRejectNullEntry() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> mapper.toMessage(null))
+                    .withMessage("entry must not be null");
         }
     }
 
     @Nested
-    @ExtendWith(MockitoExtension.class)
-    class FromMessage {
+    class ToMessages {
 
-        @Mock
-        private TokenUsageCalculator tokenUsageCalculator;
+        @Test
+        void shouldConvertMultipleEntries() {
+            List<ChatJournalEntry> entries = List.of(
+                    new ChatJournalEntry(1, MessageType.USER.name(), "Hello", 10),
+                    new ChatJournalEntry(2, MessageType.ASSISTANT.name(), "Hi!", 10)
+            );
 
-        @BeforeEach
-        void setUp() {
-            lenient().when(tokenUsageCalculator.calculateTokenUsage(anyList())).thenReturn(100);
+            List<Message> messages = mapper.toMessages(entries);
+
+            assertThat(messages).hasSize(2);
+            assertThat(messages.get(0)).isInstanceOf(UserMessage.class);
+            assertThat(messages.get(1)).isInstanceOf(AssistantMessage.class);
         }
 
         @Test
-        void shouldCreateEntryFromUserMessage() {
-            UserMessage message = new UserMessage("Hello");
-
-            ChatJournalEntry entry = ChatJournalEntry.fromMessage(message, objectMapper, tokenUsageCalculator);
-
-            assertThat(entry.messageIndex()).isZero();
-            assertThat(entry.messageType()).isEqualTo(MessageType.USER.name());
-            assertThat(entry.content()).isEqualTo("Hello");
-            assertThat(entry.tokens()).isEqualTo(100);
-        }
-
-        @Test
-        void shouldCreateEntryFromAssistantMessage() {
-            AssistantMessage message = new AssistantMessage("Hi there!");
-
-            ChatJournalEntry entry = ChatJournalEntry.fromMessage(message, objectMapper, tokenUsageCalculator);
-
-            assertThat(entry.messageType()).isEqualTo(MessageType.ASSISTANT.name());
-            assertThat(entry.content()).isEqualTo("Hi there!");
-        }
-
-        @Test
-        void shouldCreateEntryFromSystemMessage() {
-            SystemMessage message = new SystemMessage("You are helpful");
-
-            ChatJournalEntry entry = ChatJournalEntry.fromMessage(message, objectMapper, tokenUsageCalculator);
-
-            assertThat(entry.messageType()).isEqualTo(MessageType.SYSTEM.name());
-            assertThat(entry.content()).isEqualTo("You are helpful");
-        }
-
-        @Test
-        void shouldSerializeToolResponseMessage() {
-            ToolResponseMessage message = ToolResponseMessage.builder()
-                    .responses(List.of(new ToolResponse("tool-1", "calculator", "42")))
-                    .build();
-
-            ChatJournalEntry entry = ChatJournalEntry.fromMessage(message, objectMapper, tokenUsageCalculator);
-
-            assertThat(entry.messageType()).isEqualTo(MessageType.TOOL.name());
-            assertThat(entry.content()).contains("tool-1");
-            assertThat(entry.content()).contains("calculator");
-            assertThat(entry.content()).contains("42");
-        }
-
-        @Test
-        void shouldThrowUncheckedIOExceptionWhenSerializationFails() throws JsonProcessingException {
-            ObjectMapper failingMapper = org.mockito.Mockito.mock(ObjectMapper.class);
-            when(failingMapper.writeValueAsString(any()))
-                    .thenThrow(new JsonProcessingException("Simulated failure") {});
-
-            ToolResponseMessage message = ToolResponseMessage.builder()
-                    .responses(List.of(new ToolResponse("tool-1", "test", "data")))
-                    .build();
-
-            assertThatThrownBy(() -> ChatJournalEntry.fromMessage(message, failingMapper, tokenUsageCalculator))
-                    .isInstanceOf(UncheckedIOException.class)
-                    .hasMessageContaining("Failed to serialize tool responses");
-        }
-
-        @Test
-        void shouldRejectNullMessage() {
+        void shouldRejectNullEntries() {
             assertThatNullPointerException()
-                    .isThrownBy(() -> ChatJournalEntry.fromMessage(null, objectMapper, tokenUsageCalculator))
-                    .withMessage("message must not be null");
+                    .isThrownBy(() -> mapper.toMessages(null))
+                    .withMessage("entries must not be null");
         }
+    }
+
+    @Nested
+    class ConstructorValidation {
 
         @Test
         void shouldRejectNullObjectMapper() {
-            UserMessage message = new UserMessage("Hello");
             assertThatNullPointerException()
-                    .isThrownBy(() -> ChatJournalEntry.fromMessage(message, null, tokenUsageCalculator))
+                    .isThrownBy(() -> new ChatJournalEntryMapper(null, tokenUsageCalculator))
                     .withMessage("objectMapper must not be null");
         }
 
         @Test
         void shouldRejectNullTokenUsageCalculator() {
-            UserMessage message = new UserMessage("Hello");
             assertThatNullPointerException()
-                    .isThrownBy(() -> ChatJournalEntry.fromMessage(message, objectMapper, null))
+                    .isThrownBy(() -> new ChatJournalEntryMapper(objectMapper, null))
                     .withMessage("tokenUsageCalculator must not be null");
         }
     }

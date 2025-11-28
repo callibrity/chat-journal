@@ -18,7 +18,6 @@ package com.callibrity.ai.chatjournal.jdbc;
 import com.callibrity.ai.chatjournal.repository.ChatJournalEntry;
 import com.callibrity.ai.chatjournal.repository.ChatJournalEntryRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Objects;
@@ -26,18 +25,8 @@ import java.util.Objects;
 /**
  * JDBC-based implementation of {@link ChatJournalEntryRepository}.
  *
- * <p>This implementation stores chat journal entries in a relational database using Spring's
- * {@link JdbcTemplate}. It requires a table named {@code chat_journal} with the following schema:
- *
- * <pre>{@code
- * CREATE TABLE chat_journal (
- *     message_index BIGSERIAL PRIMARY KEY,
- *     conversation_id VARCHAR(255) NOT NULL,
- *     message_type VARCHAR(50) NOT NULL,
- *     content TEXT NOT NULL,
- *     tokens INTEGER NOT NULL
- * );
- * }</pre>
+ * <p>This implementation stores chat journal entries in a relational database
+ * using Spring's {@link JdbcTemplate}. It requires a table named {@code chat_journal}.
  *
  * <p>This class is thread-safe as it delegates all operations to the thread-safe JdbcTemplate.
  *
@@ -46,22 +35,15 @@ import java.util.Objects;
 public class JdbcChatJournalEntryRepository implements ChatJournalEntryRepository {
 
     private final JdbcTemplate jdbcTemplate;
-    private final int minRetainedEntries;
 
     /**
      * Creates a new JdbcChatJournalEntryRepository.
      *
      * @param jdbcTemplate the JdbcTemplate for database operations
-     * @param minRetainedEntries the minimum number of recent entries to retain during compaction; must be positive
      * @throws NullPointerException if jdbcTemplate is null
-     * @throws IllegalArgumentException if minRetainedEntries is not positive
      */
-    public JdbcChatJournalEntryRepository(JdbcTemplate jdbcTemplate, int minRetainedEntries) {
+    public JdbcChatJournalEntryRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = Objects.requireNonNull(jdbcTemplate, "jdbcTemplate must not be null");
-        if (minRetainedEntries <= 0) {
-            throw new IllegalArgumentException("minRetainedEntries must be positive");
-        }
-        this.minRetainedEntries = minRetainedEntries;
     }
 
     @Override
@@ -97,10 +79,16 @@ public class JdbcChatJournalEntryRepository implements ChatJournalEntryRepositor
     }
 
     @Override
-    public List<ChatJournalEntry> findEntriesForCompaction(String conversationId) {
+    public List<ChatJournalEntry> findVisibleEntries(String conversationId, int offset, int limit) {
         validateConversationId(conversationId);
+        if (offset < 0) {
+            throw new IllegalArgumentException("offset must not be negative");
+        }
+        if (limit <= 0) {
+            throw new IllegalArgumentException("limit must be positive");
+        }
         return jdbcTemplate.query(
-                "SELECT message_index, message_type, content, tokens FROM chat_journal WHERE conversation_id = ? ORDER BY message_index DESC OFFSET ?",
+                "SELECT message_index, message_type, content, tokens FROM chat_journal WHERE conversation_id = ? AND message_type IN ('USER', 'ASSISTANT') ORDER BY message_index DESC LIMIT ? OFFSET ?",
                 (rs, rowNum) -> new ChatJournalEntry(
                         rs.getLong("message_index"),
                         rs.getString("message_type"),
@@ -108,12 +96,40 @@ public class JdbcChatJournalEntryRepository implements ChatJournalEntryRepositor
                         rs.getInt("tokens")
                 ),
                 conversationId,
-                minRetainedEntries
+                limit,
+                offset
         );
     }
 
     @Override
-    public int getTotalTokens(String conversationId) {
+    public int countVisibleEntries(String conversationId) {
+        validateConversationId(conversationId);
+        //noinspection DataFlowIssue - COUNT guarantees non-null result
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM chat_journal WHERE conversation_id = ? AND message_type IN ('USER', 'ASSISTANT')",
+                Integer.class,
+                conversationId
+        );
+    }
+
+    @Override
+    public List<ChatJournalEntry> findEntriesAfterIndex(String conversationId, long messageIndex) {
+        validateConversationId(conversationId);
+        return jdbcTemplate.query(
+                "SELECT message_index, message_type, content, tokens FROM chat_journal WHERE conversation_id = ? AND message_index > ? ORDER BY message_index",
+                (rs, rowNum) -> new ChatJournalEntry(
+                        rs.getLong("message_index"),
+                        rs.getString("message_type"),
+                        rs.getString("content"),
+                        rs.getInt("tokens")
+                ),
+                conversationId,
+                messageIndex
+        );
+    }
+
+    @Override
+    public int sumTokens(String conversationId) {
         validateConversationId(conversationId);
         //noinspection DataFlowIssue - COALESCE guarantees non-null result
         return jdbcTemplate.queryForObject(
@@ -124,29 +140,21 @@ public class JdbcChatJournalEntryRepository implements ChatJournalEntryRepositor
     }
 
     @Override
-    public void deleteAll(String conversationId) {
+    public int sumTokensAfterIndex(String conversationId, long messageIndex) {
         validateConversationId(conversationId);
-        jdbcTemplate.update("DELETE FROM chat_journal WHERE conversation_id = ?", conversationId);
+        //noinspection DataFlowIssue - COALESCE guarantees non-null result
+        return jdbcTemplate.queryForObject(
+                "SELECT COALESCE(SUM(tokens), 0) FROM chat_journal WHERE conversation_id = ? AND message_index > ?",
+                Integer.class,
+                conversationId,
+                messageIndex
+        );
     }
 
     @Override
-    @Transactional
-    public void replaceEntriesWithSummary(String conversationId, ChatJournalEntry summaryEntry) {
+    public void deleteAll(String conversationId) {
         validateConversationId(conversationId);
-        Objects.requireNonNull(summaryEntry, "summaryEntry must not be null");
-        jdbcTemplate.update(
-                "DELETE FROM chat_journal WHERE conversation_id = ? AND message_index <= ?",
-                conversationId,
-                summaryEntry.messageIndex()
-        );
-        jdbcTemplate.update(
-                "INSERT INTO chat_journal (message_index, conversation_id, message_type, content, tokens) VALUES (?, ?, ?, ?, ?)",
-                summaryEntry.messageIndex(),
-                conversationId,
-                summaryEntry.messageType(),
-                summaryEntry.content(),
-                summaryEntry.tokens()
-        );
+        jdbcTemplate.update("DELETE FROM chat_journal WHERE conversation_id = ?", conversationId);
     }
 
     private static void validateConversationId(String conversationId) {

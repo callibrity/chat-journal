@@ -27,15 +27,14 @@ import org.springframework.test.context.jdbc.Sql;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 @JdbcTest
 @Sql("/schema-h2.sql")
 class JdbcChatJournalEntryRepositoryTest {
 
     private static final String CONVERSATION_ID = "test-conversation";
-    private static final int MIN_RETAINED_ENTRIES = 2;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -44,7 +43,8 @@ class JdbcChatJournalEntryRepositoryTest {
 
     @BeforeEach
     void setUp() {
-        repository = new JdbcChatJournalEntryRepository(jdbcTemplate, MIN_RETAINED_ENTRIES);
+        repository = new JdbcChatJournalEntryRepository(jdbcTemplate);
+        jdbcTemplate.update("DELETE FROM chat_journal_checkpoint");
         jdbcTemplate.update("DELETE FROM chat_journal");
     }
 
@@ -126,59 +126,109 @@ class JdbcChatJournalEntryRepositoryTest {
     }
 
     @Nested
-    class FindEntriesForCompaction {
+    class FindVisibleEntries {
 
         @Test
-        void shouldReturnEntriesExcludingMostRecent() {
+        void shouldReturnOnlyUserAndAssistantMessages() {
             repository.save(CONVERSATION_ID, List.of(
-                    new ChatJournalEntry(0, "USER", "Message 1", 10),
-                    new ChatJournalEntry(0, "ASSISTANT", "Message 2", 15),
-                    new ChatJournalEntry(0, "USER", "Message 3", 10),
-                    new ChatJournalEntry(0, "ASSISTANT", "Message 4", 15)
+                    new ChatJournalEntry(0, "USER", "User message", 10),
+                    new ChatJournalEntry(0, "SYSTEM", "System message", 15),
+                    new ChatJournalEntry(0, "ASSISTANT", "Assistant message", 10)
             ));
 
-            List<ChatJournalEntry> entries = repository.findEntriesForCompaction(CONVERSATION_ID);
+            List<ChatJournalEntry> entries = repository.findVisibleEntries(CONVERSATION_ID, 0, 10);
 
-            // With MIN_RETAINED_ENTRIES = 2, should return all but the 2 most recent
             assertThat(entries).hasSize(2);
-            // Results are in descending order
-            assertThat(entries.get(0).content()).isEqualTo("Message 2");
-            assertThat(entries.get(1).content()).isEqualTo("Message 1");
+            assertThat(entries).extracting(ChatJournalEntry::messageType)
+                    .containsExactly("ASSISTANT", "USER");
         }
 
         @Test
-        void shouldReturnEmptyWhenNotEnoughEntries() {
-            repository.save(CONVERSATION_ID, List.of(
-                    new ChatJournalEntry(0, "USER", "Message 1", 10),
-                    new ChatJournalEntry(0, "ASSISTANT", "Message 2", 15)
-            ));
-
-            List<ChatJournalEntry> entries = repository.findEntriesForCompaction(CONVERSATION_ID);
-
-            assertThat(entries).isEmpty();
-        }
-
-        @Test
-        void shouldReturnEntriesInDescendingOrder() {
+        void shouldReturnInReverseChronologicalOrder() {
             repository.save(CONVERSATION_ID, List.of(
                     new ChatJournalEntry(0, "USER", "First", 10),
                     new ChatJournalEntry(0, "ASSISTANT", "Second", 15),
-                    new ChatJournalEntry(0, "USER", "Third", 10),
-                    new ChatJournalEntry(0, "ASSISTANT", "Fourth", 15),
-                    new ChatJournalEntry(0, "USER", "Fifth", 10)
+                    new ChatJournalEntry(0, "USER", "Third", 10)
             ));
 
-            List<ChatJournalEntry> entries = repository.findEntriesForCompaction(CONVERSATION_ID);
+            List<ChatJournalEntry> entries = repository.findVisibleEntries(CONVERSATION_ID, 0, 10);
 
             assertThat(entries).hasSize(3);
             assertThat(entries.get(0).content()).isEqualTo("Third");
             assertThat(entries.get(1).content()).isEqualTo("Second");
             assertThat(entries.get(2).content()).isEqualTo("First");
         }
+
+        @Test
+        void shouldApplyOffsetAndLimit() {
+            repository.save(CONVERSATION_ID, List.of(
+                    new ChatJournalEntry(0, "USER", "First", 10),
+                    new ChatJournalEntry(0, "ASSISTANT", "Second", 15),
+                    new ChatJournalEntry(0, "USER", "Third", 10),
+                    new ChatJournalEntry(0, "ASSISTANT", "Fourth", 15)
+            ));
+
+            List<ChatJournalEntry> entries = repository.findVisibleEntries(CONVERSATION_ID, 1, 2);
+
+            assertThat(entries).hasSize(2);
+            assertThat(entries.get(0).content()).isEqualTo("Third");
+            assertThat(entries.get(1).content()).isEqualTo("Second");
+        }
     }
 
     @Nested
-    class GetTotalTokens {
+    class CountVisibleEntries {
+
+        @Test
+        void shouldCountOnlyUserAndAssistantMessages() {
+            repository.save(CONVERSATION_ID, List.of(
+                    new ChatJournalEntry(0, "USER", "User message", 10),
+                    new ChatJournalEntry(0, "SYSTEM", "System message", 15),
+                    new ChatJournalEntry(0, "ASSISTANT", "Assistant message", 10)
+            ));
+
+            int count = repository.countVisibleEntries(CONVERSATION_ID);
+
+            assertThat(count).isEqualTo(2);
+        }
+
+        @Test
+        void shouldReturnZeroWhenNoVisibleEntries() {
+            repository.save(CONVERSATION_ID, List.of(
+                    new ChatJournalEntry(0, "SYSTEM", "System message", 15)
+            ));
+
+            int count = repository.countVisibleEntries(CONVERSATION_ID);
+
+            assertThat(count).isZero();
+        }
+    }
+
+    @Nested
+    class FindEntriesAfterIndex {
+
+        @Test
+        void shouldReturnOnlyEntriesAfterIndex() {
+            repository.save(CONVERSATION_ID, List.of(
+                    new ChatJournalEntry(0, "USER", "First", 10),
+                    new ChatJournalEntry(0, "ASSISTANT", "Second", 15),
+                    new ChatJournalEntry(0, "USER", "Third", 10),
+                    new ChatJournalEntry(0, "ASSISTANT", "Fourth", 15)
+            ));
+
+            List<ChatJournalEntry> allEntries = repository.findAll(CONVERSATION_ID);
+            long indexAfterSecond = allEntries.get(1).messageIndex();
+
+            List<ChatJournalEntry> entries = repository.findEntriesAfterIndex(CONVERSATION_ID, indexAfterSecond);
+
+            assertThat(entries).hasSize(2);
+            assertThat(entries.get(0).content()).isEqualTo("Third");
+            assertThat(entries.get(1).content()).isEqualTo("Fourth");
+        }
+    }
+
+    @Nested
+    class SumTokens {
 
         @Test
         void shouldSumTokensForConversation() {
@@ -188,26 +238,38 @@ class JdbcChatJournalEntryRepositoryTest {
                     new ChatJournalEntry(0, "USER", "Message 3", 15)
             ));
 
-            int totalTokens = repository.getTotalTokens(CONVERSATION_ID);
+            int totalTokens = repository.sumTokens(CONVERSATION_ID);
 
             assertThat(totalTokens).isEqualTo(50);
         }
 
         @Test
         void shouldReturnZeroWhenNoEntries() {
-            int totalTokens = repository.getTotalTokens(CONVERSATION_ID);
+            int totalTokens = repository.sumTokens(CONVERSATION_ID);
 
             assertThat(totalTokens).isZero();
         }
+    }
+
+    @Nested
+    class SumTokensAfterIndex {
 
         @Test
-        void shouldOnlySumTokensForSpecifiedConversation() {
-            repository.save("conversation-1", List.of(new ChatJournalEntry(0, "USER", "Conv 1", 100)));
-            repository.save("conversation-2", List.of(new ChatJournalEntry(0, "USER", "Conv 2", 200)));
+        void shouldSumTokensAfterIndex() {
+            repository.save(CONVERSATION_ID, List.of(
+                    new ChatJournalEntry(0, "USER", "Message 1", 10),
+                    new ChatJournalEntry(0, "ASSISTANT", "Message 2", 20),
+                    new ChatJournalEntry(0, "USER", "Message 3", 30),
+                    new ChatJournalEntry(0, "ASSISTANT", "Message 4", 40)
+            ));
 
-            int totalTokens = repository.getTotalTokens("conversation-1");
+            List<ChatJournalEntry> allEntries = repository.findAll(CONVERSATION_ID);
+            long indexAfterSecond = allEntries.get(1).messageIndex();
 
-            assertThat(totalTokens).isEqualTo(100);
+            int totalTokens = repository.sumTokensAfterIndex(CONVERSATION_ID, indexAfterSecond);
+
+            // Message 3 (30) + Message 4 (40) = 70
+            assertThat(totalTokens).isEqualTo(70);
         }
     }
 
@@ -239,82 +301,13 @@ class JdbcChatJournalEntryRepositoryTest {
     }
 
     @Nested
-    class ReplaceEntriesWithSummary {
-
-        @Test
-        void shouldDeleteOldEntriesAndInsertSummary() {
-            repository.save(CONVERSATION_ID, List.of(
-                    new ChatJournalEntry(0, "USER", "Message 1", 10),
-                    new ChatJournalEntry(0, "ASSISTANT", "Message 2", 15),
-                    new ChatJournalEntry(0, "USER", "Message 3", 10),
-                    new ChatJournalEntry(0, "ASSISTANT", "Message 4", 15)
-            ));
-
-            List<ChatJournalEntry> allEntries = repository.findAll(CONVERSATION_ID);
-            long thirdMessageIndex = allEntries.get(2).messageIndex();
-
-            ChatJournalEntry summaryEntry = new ChatJournalEntry(
-                    thirdMessageIndex,
-                    "SYSTEM",
-                    "Summary of previous conversation",
-                    50
-            );
-
-            repository.replaceEntriesWithSummary(CONVERSATION_ID, summaryEntry);
-
-            List<ChatJournalEntry> remainingEntries = repository.findAll(CONVERSATION_ID);
-            assertThat(remainingEntries).hasSize(2);
-            assertThat(remainingEntries.get(0).messageType()).isEqualTo("SYSTEM");
-            assertThat(remainingEntries.get(0).content()).isEqualTo("Summary of previous conversation");
-            assertThat(remainingEntries.get(1).content()).isEqualTo("Message 4");
-        }
-
-        @Test
-        void shouldPreserveSummaryMessageIndex() {
-            repository.save(CONVERSATION_ID, List.of(
-                    new ChatJournalEntry(0, "USER", "Message 1", 10),
-                    new ChatJournalEntry(0, "ASSISTANT", "Message 2", 15)
-            ));
-
-            List<ChatJournalEntry> allEntries = repository.findAll(CONVERSATION_ID);
-            long firstMessageIndex = allEntries.get(0).messageIndex();
-
-            ChatJournalEntry summaryEntry = new ChatJournalEntry(
-                    firstMessageIndex,
-                    "SYSTEM",
-                    "Summary",
-                    30
-            );
-
-            repository.replaceEntriesWithSummary(CONVERSATION_ID, summaryEntry);
-
-            List<ChatJournalEntry> remainingEntries = repository.findAll(CONVERSATION_ID);
-            assertThat(remainingEntries.get(0).messageIndex()).isEqualTo(firstMessageIndex);
-        }
-    }
-
-    @Nested
     class ConstructorValidation {
 
         @Test
         void shouldRejectNullJdbcTemplate() {
             assertThatNullPointerException()
-                    .isThrownBy(() -> new JdbcChatJournalEntryRepository(null, MIN_RETAINED_ENTRIES))
+                    .isThrownBy(() -> new JdbcChatJournalEntryRepository(null))
                     .withMessage("jdbcTemplate must not be null");
-        }
-
-        @Test
-        void shouldRejectZeroMinRetainedEntries() {
-            assertThatIllegalArgumentException()
-                    .isThrownBy(() -> new JdbcChatJournalEntryRepository(jdbcTemplate, 0))
-                    .withMessage("minRetainedEntries must be positive");
-        }
-
-        @Test
-        void shouldRejectNegativeMinRetainedEntries() {
-            assertThatIllegalArgumentException()
-                    .isThrownBy(() -> new JdbcChatJournalEntryRepository(jdbcTemplate, -1))
-                    .withMessage("minRetainedEntries must be positive");
         }
     }
 
@@ -357,30 +350,16 @@ class JdbcChatJournalEntryRepositoryTest {
         }
 
         @Test
-        void findEntriesForCompactionShouldRejectNullConversationId() {
+        void sumTokensShouldRejectNullConversationId() {
             assertThatNullPointerException()
-                    .isThrownBy(() -> repository.findEntriesForCompaction(null))
+                    .isThrownBy(() -> repository.sumTokens(null))
                     .withMessage("conversationId must not be null");
         }
 
         @Test
-        void findEntriesForCompactionShouldRejectEmptyConversationId() {
+        void sumTokensShouldRejectEmptyConversationId() {
             assertThatIllegalArgumentException()
-                    .isThrownBy(() -> repository.findEntriesForCompaction(""))
-                    .withMessage("conversationId must not be empty");
-        }
-
-        @Test
-        void getTotalTokensShouldRejectNullConversationId() {
-            assertThatNullPointerException()
-                    .isThrownBy(() -> repository.getTotalTokens(null))
-                    .withMessage("conversationId must not be null");
-        }
-
-        @Test
-        void getTotalTokensShouldRejectEmptyConversationId() {
-            assertThatIllegalArgumentException()
-                    .isThrownBy(() -> repository.getTotalTokens(""))
+                    .isThrownBy(() -> repository.sumTokens(""))
                     .withMessage("conversationId must not be empty");
         }
 
@@ -399,26 +378,24 @@ class JdbcChatJournalEntryRepositoryTest {
         }
 
         @Test
-        void replaceEntriesWithSummaryShouldRejectNullConversationId() {
-            ChatJournalEntry summaryEntry = new ChatJournalEntry(1, "SYSTEM", "Summary", 10);
-            assertThatNullPointerException()
-                    .isThrownBy(() -> repository.replaceEntriesWithSummary(null, summaryEntry))
-                    .withMessage("conversationId must not be null");
-        }
-
-        @Test
-        void replaceEntriesWithSummaryShouldRejectEmptyConversationId() {
-            ChatJournalEntry summaryEntry = new ChatJournalEntry(1, "SYSTEM", "Summary", 10);
+        void findVisibleEntriesShouldRejectNegativeOffset() {
             assertThatIllegalArgumentException()
-                    .isThrownBy(() -> repository.replaceEntriesWithSummary("", summaryEntry))
-                    .withMessage("conversationId must not be empty");
+                    .isThrownBy(() -> repository.findVisibleEntries(CONVERSATION_ID, -1, 10))
+                    .withMessage("offset must not be negative");
         }
 
         @Test
-        void replaceEntriesWithSummaryShouldRejectNullSummaryEntry() {
-            assertThatNullPointerException()
-                    .isThrownBy(() -> repository.replaceEntriesWithSummary(CONVERSATION_ID, null))
-                    .withMessage("summaryEntry must not be null");
+        void findVisibleEntriesShouldRejectZeroLimit() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> repository.findVisibleEntries(CONVERSATION_ID, 0, 0))
+                    .withMessage("limit must be positive");
+        }
+
+        @Test
+        void findVisibleEntriesShouldRejectNegativeLimit() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> repository.findVisibleEntries(CONVERSATION_ID, 0, -1))
+                    .withMessage("limit must be positive");
         }
     }
 }

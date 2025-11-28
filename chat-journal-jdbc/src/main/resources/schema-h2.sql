@@ -3,7 +3,16 @@ CREATE TABLE IF NOT EXISTS chat_journal (
     conversation_id VARCHAR(255) NOT NULL,
     message_type    VARCHAR(20) NOT NULL,
     content         CLOB NOT NULL,
-    tokens          INTEGER NOT NULL
+    tokens          INTEGER NOT NULL,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_chat_journal_conversation_id ON chat_journal (conversation_id);
+
+CREATE TABLE IF NOT EXISTS chat_journal_checkpoint (
+    conversation_id  VARCHAR(255) PRIMARY KEY,
+    checkpoint_index BIGINT NOT NULL,
+    summary          CLOB NOT NULL,
+    tokens           INTEGER NOT NULL,
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
