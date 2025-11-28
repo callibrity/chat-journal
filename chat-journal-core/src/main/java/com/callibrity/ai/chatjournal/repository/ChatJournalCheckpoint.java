@@ -32,7 +32,7 @@ package com.callibrity.ai.chatjournal.repository;
  * @param summary the summarized content of older messages
  * @param tokens the estimated or calculated token count for the summary
  * @see ChatJournalEntry
- * @see ChatJournalRepository
+ * @see ChatJournalCheckpointRepository
  */
 public record ChatJournalCheckpoint(long checkpointIndex, String summary, int tokens) {
 }

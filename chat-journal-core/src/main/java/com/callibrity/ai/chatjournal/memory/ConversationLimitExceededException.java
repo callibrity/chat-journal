@@ -21,9 +21,13 @@ package com.callibrity.ai.chatjournal.memory;
  */
 public class ConversationLimitExceededException extends RuntimeException {
 
+    /** The conversation ID. */
     private final String conversationId;
+    /** The current number of messages in the conversation. */
     private final int currentLength;
+    /** The maximum allowed conversation length. */
     private final int maxLength;
+    /** The number of new messages that were attempted to be added. */
     private final int newMessageCount;
 
     /**
