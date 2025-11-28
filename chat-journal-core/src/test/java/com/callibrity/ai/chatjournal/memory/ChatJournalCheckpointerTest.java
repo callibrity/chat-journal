@@ -177,8 +177,7 @@ class ChatJournalCheckpointerTest {
         @Test
         void shouldSkipWhenNotEnoughEntries() {
             List<ChatJournalEntry> entries = List.of(
-                    new ChatJournalEntry(1, "USER", "Hello", 10),
-                    new ChatJournalEntry(2, "ASSISTANT", "Hi!", 10)
+                    new ChatJournalEntry(1, "USER", "Hello", 10)
             );
             when(checkpointRepository.findCheckpoint(CONVERSATION_ID)).thenReturn(Optional.empty());
             when(entryRepository.findAll(CONVERSATION_ID)).thenReturn(entries);
