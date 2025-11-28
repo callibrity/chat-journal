@@ -17,6 +17,7 @@ package com.callibrity.ai.chatjournal.example;
 
 import com.callibrity.ai.chatjournal.memory.ChatMemoryUsage;
 import com.callibrity.ai.chatjournal.memory.ChatMemoryUsageProvider;
+import com.callibrity.ai.chatjournal.repository.ChatJournalEntry;
 import com.callibrity.ai.chatjournal.repository.ChatJournalEntryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -33,6 +34,7 @@ import org.springframework.core.task.TaskExecutor;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 
+import java.util.List;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -163,6 +165,102 @@ class ChatControllerTest {
             assertThat(done.currentTokens()).isEqualTo(500);
             assertThat(done.maxTokens()).isEqualTo(1000);
             assertThat(done.percentageUsed()).isEqualTo(50.0);
+        }
+    }
+
+    @Nested
+    class History {
+
+        @Test
+        void shouldReturnHistoryResponse() {
+            var entries = List.of(
+                    new ChatJournalEntry(2, "ASSISTANT", "Hello!", 10),
+                    new ChatJournalEntry(1, "USER", "Hi", 5)
+            );
+            when(entryRepository.findVisibleEntries("conv-123", 0, 50)).thenReturn(entries);
+            when(entryRepository.countVisibleEntries("conv-123")).thenReturn(2);
+            when(memoryUsageProvider.getMemoryUsage("conv-123"))
+                    .thenReturn(new ChatMemoryUsage(500, 1000));
+
+            var response = controller.history("conv-123", 0, 50);
+
+            assertThat(response.messages()).hasSize(2);
+            assertThat(response.totalCount()).isEqualTo(2);
+            assertThat(response.currentTokens()).isEqualTo(500);
+            assertThat(response.maxTokens()).isEqualTo(1000);
+            assertThat(response.percentageUsed()).isEqualTo(50.0);
+        }
+
+        @Test
+        void shouldMapEntriesToMessages() {
+            var entries = List.of(
+                    new ChatJournalEntry(1, "USER", "Hello", 5),
+                    new ChatJournalEntry(2, "ASSISTANT", "Hi there!", 10)
+            );
+            when(entryRepository.findVisibleEntries("conv-123", 0, 50)).thenReturn(entries);
+            when(entryRepository.countVisibleEntries("conv-123")).thenReturn(2);
+            when(memoryUsageProvider.getMemoryUsage("conv-123"))
+                    .thenReturn(new ChatMemoryUsage(100, 1000));
+
+            var response = controller.history("conv-123", 0, 50);
+
+            assertThat(response.messages().get(0).type()).isEqualTo("USER");
+            assertThat(response.messages().get(0).content()).isEqualTo("Hello");
+            assertThat(response.messages().get(1).type()).isEqualTo("ASSISTANT");
+            assertThat(response.messages().get(1).content()).isEqualTo("Hi there!");
+        }
+
+        @Test
+        void shouldPassOffsetAndLimitToRepository() {
+            when(entryRepository.findVisibleEntries("conv-123", 10, 25)).thenReturn(List.of());
+            when(entryRepository.countVisibleEntries("conv-123")).thenReturn(0);
+            when(memoryUsageProvider.getMemoryUsage("conv-123"))
+                    .thenReturn(new ChatMemoryUsage(0, 1000));
+
+            controller.history("conv-123", 10, 25);
+
+            verify(entryRepository).findVisibleEntries("conv-123", 10, 25);
+        }
+
+        @Test
+        void shouldReturnEmptyListWhenNoMessages() {
+            when(entryRepository.findVisibleEntries("conv-123", 0, 50)).thenReturn(List.of());
+            when(entryRepository.countVisibleEntries("conv-123")).thenReturn(0);
+            when(memoryUsageProvider.getMemoryUsage("conv-123"))
+                    .thenReturn(new ChatMemoryUsage(0, 1000));
+
+            var response = controller.history("conv-123", 0, 50);
+
+            assertThat(response.messages()).isEmpty();
+            assertThat(response.totalCount()).isZero();
+        }
+    }
+
+    @Nested
+    class HistoryResponseRecord {
+
+        @Test
+        void shouldCreateHistoryResponseWithAllFields() {
+            var messages = List.of(new ChatController.HistoryMessage("USER", "Hello"));
+            var response = new ChatController.HistoryResponse(messages, 10, 500, 1000, 50.0);
+
+            assertThat(response.messages()).isEqualTo(messages);
+            assertThat(response.totalCount()).isEqualTo(10);
+            assertThat(response.currentTokens()).isEqualTo(500);
+            assertThat(response.maxTokens()).isEqualTo(1000);
+            assertThat(response.percentageUsed()).isEqualTo(50.0);
+        }
+    }
+
+    @Nested
+    class HistoryMessageRecord {
+
+        @Test
+        void shouldCreateHistoryMessageWithTypeAndContent() {
+            var message = new ChatController.HistoryMessage("ASSISTANT", "Hello there!");
+
+            assertThat(message.type()).isEqualTo("ASSISTANT");
+            assertThat(message.content()).isEqualTo("Hello there!");
         }
     }
 }
