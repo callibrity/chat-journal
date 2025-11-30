@@ -390,6 +390,11 @@
         let loadedMessages = 0;
         let isLoadingHistory = false;
 
+        // Prompt history for up/down arrow navigation
+        let promptHistory = [];
+        let historyIndex = -1;
+        let currentDraft = '';
+
         const chatContainer = document.getElementById('chatContainer');
         const questionInput = document.getElementById('questionInput');
         const sendButton = document.getElementById('sendButton');
@@ -418,6 +423,53 @@
             if (e.key === 'Enter' && !sendButton.disabled) {
                 sendMessage();
             }
+        });
+
+        // Handle up/down arrow keys for prompt history navigation
+        let isNavigatingHistory = false;
+        questionInput.addEventListener('keydown', (e) => {
+            if (promptHistory.length === 0) return;
+
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                isNavigatingHistory = true;
+                if (historyIndex === -1) {
+                    // Save current input as draft before navigating history
+                    currentDraft = questionInput.value;
+                    historyIndex = promptHistory.length - 1;
+                } else if (historyIndex > 0) {
+                    historyIndex--;
+                }
+                questionInput.value = promptHistory[historyIndex];
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                isNavigatingHistory = true;
+                if (historyIndex === -1) return;
+
+                if (historyIndex < promptHistory.length - 1) {
+                    historyIndex++;
+                    questionInput.value = promptHistory[historyIndex];
+                } else {
+                    // Return to draft and reset history navigation
+                    historyIndex = -1;
+                    questionInput.value = currentDraft;
+                }
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                questionInput.value = '';
+                historyIndex = -1;
+                currentDraft = '';
+            }
+        });
+
+        // Reset history navigation when user types
+        questionInput.addEventListener('input', () => {
+            if (isNavigatingHistory) {
+                isNavigatingHistory = false;
+                return;
+            }
+            historyIndex = -1;
+            currentDraft = '';
         });
 
         function renderMarkdown(text) {
@@ -462,6 +514,11 @@
         function sendMessage() {
             const question = questionInput.value.trim();
             if (!question) return;
+
+            // Add to prompt history and reset navigation state
+            promptHistory.push(question);
+            historyIndex = -1;
+            currentDraft = '';
 
             // Add user message
             addMessage(question, 'user');
@@ -566,6 +623,9 @@
             localStorage.removeItem('conversationId');
             totalMessages = 0;
             loadedMessages = 0;
+            promptHistory = [];
+            historyIndex = -1;
+            currentDraft = '';
             chatContainer.innerHTML = '';
             addMessage("Hello! I'm powered by OpenAI. How can I help you today?", 'assistant');
             statusText.textContent = 'Ready';
@@ -593,6 +653,19 @@
                 if (data.messages.length > 0) {
                     // Messages come in reverse order (newest first), so reverse them for display
                     const messages = data.messages.reverse();
+
+                    // Extract user prompts for history navigation
+                    const userPrompts = messages
+                        .filter(msg => msg.type === 'USER')
+                        .map(msg => msg.content);
+
+                    if (offset === 0) {
+                        // Initial load - these are the most recent messages
+                        promptHistory = userPrompts;
+                    } else {
+                        // Loading older messages - prepend to history
+                        promptHistory = userPrompts.concat(promptHistory);
+                    }
 
                     // Save scroll position
                     const scrollHeightBefore = chatContainer.scrollHeight;
