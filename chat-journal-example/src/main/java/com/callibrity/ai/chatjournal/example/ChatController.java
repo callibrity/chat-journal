@@ -15,7 +15,7 @@
  */
 package com.callibrity.ai.chatjournal.example;
 
-import com.callibrity.ai.chatjournal.example.sse.UncheckedSseEmitter;
+import com.callibrity.ai.chatjournal.example.sse.ChatCompletionEmitter;
 import com.callibrity.ai.chatjournal.memory.ChatMemoryUsage;
 import com.callibrity.ai.chatjournal.memory.ChatMemoryUsageProvider;
 import com.callibrity.ai.chatjournal.repository.ChatJournalEntry;
@@ -63,7 +63,7 @@ public class ChatController {
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, actualConversationId))
                 .stream()
                 .content();
-        var emitter = new UncheckedSseEmitter(new SseEmitter(0L));
+        var emitter = new ChatCompletionEmitter(conversationId);
 
         executor.execute(() -> {
             emitter.send("metadata", new Metadata(actualConversationId));
@@ -71,11 +71,10 @@ public class ChatController {
                 emitter.send("chunk", new Chunk(item));
             }
             ChatMemoryUsage usage = memoryUsageProvider.getMemoryUsage(actualConversationId);
-            emitter.send("done", new Done(usage.currentTokens(), usage.maxTokens(), usage.percentageUsed()));
-            emitter.complete();
+            emitter.complete("done", new Done(usage.currentTokens(), usage.maxTokens(), usage.percentageUsed()));
         });
 
-        return emitter.getNested();
+        return emitter.getEmitter();
     }
 
     @GetMapping("/chat/history")
