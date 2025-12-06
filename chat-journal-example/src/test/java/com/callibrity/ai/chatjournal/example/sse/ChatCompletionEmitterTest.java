@@ -21,10 +21,6 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -40,7 +36,7 @@ class ChatCompletionEmitterTest {
             var emitter = new ChatCompletionEmitter(CONVERSATION_ID);
 
             assertThat(emitter.getEmitter()).isNotNull();
-            assertThat(emitter.getEmitter().getTimeout()).isEqualTo(0L);
+            assertThat(emitter.getEmitter().getTimeout()).isZero();
         }
 
         @Test
@@ -57,7 +53,7 @@ class ChatCompletionEmitterTest {
         void shouldCreateEmitterWithZeroTimeoutUsingDurationZero() {
             var emitter = new ChatCompletionEmitter(CONVERSATION_ID, Duration.ZERO);
 
-            assertThat(emitter.getEmitter().getTimeout()).isEqualTo(0L);
+            assertThat(emitter.getEmitter().getTimeout()).isZero();
         }
 
         @Test
@@ -313,7 +309,7 @@ class ChatCompletionEmitterTest {
         void shouldHandleZeroDurationAsNoTimeout() {
             var emitter = new ChatCompletionEmitter(CONVERSATION_ID, Duration.ZERO);
 
-            assertThat(emitter.getEmitter().getTimeout()).isEqualTo(0L);
+            assertThat(emitter.getEmitter().getTimeout()).isZero();
         }
     }
 

@@ -15,6 +15,7 @@
  */
 package com.callibrity.ai.chatjournal.example;
 
+import com.callibrity.ai.chatjournal.example.sse.StreamingChatClient;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Answers;
@@ -22,6 +23,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.core.task.TaskExecutor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
@@ -38,6 +40,9 @@ class ChatConfigurationTest {
     @Mock
     private ChatMemory chatMemory;
 
+    @Mock
+    private TaskExecutor taskExecutor;
+
     @Test
     void shouldCreateChatClient() {
         var config = new ChatConfiguration();
@@ -46,5 +51,15 @@ class ChatConfigurationTest {
         var result = config.chatClient(chatClientBuilder, chatMemory, "Test system prompt");
 
         assertThat(result).isEqualTo(chatClient);
+    }
+
+    @Test
+    void shouldCreateStreamingChatClient() {
+        var config = new ChatConfiguration();
+
+        var result = config.streamingChatClient(chatClient, taskExecutor);
+
+        assertThat(result).isNotNull();
+        assertThat(result).isInstanceOf(StreamingChatClient.class);
     }
 }

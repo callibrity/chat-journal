@@ -18,6 +18,9 @@ package com.callibrity.ai.chatjournal.example.sse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.core.task.TaskExecutor;
 
@@ -55,8 +58,9 @@ class StreamingChatClientTest {
         void shouldReturnStreamingRequestBuilder() {
             var builder = streamingChatClient.stream(CONVERSATION_ID);
 
-            assertThat(builder).isNotNull();
-            assertThat(builder).isInstanceOf(StreamingRequestBuilder.class);
+            assertThat(builder)
+                    .isNotNull()
+                    .isInstanceOf(StreamingRequestBuilder.class);
         }
 
         @Test
@@ -72,9 +76,10 @@ class StreamingChatClientTest {
             var builder1 = streamingChatClient.stream("conv-1");
             var builder2 = streamingChatClient.stream("conv-2");
 
-            assertThat(builder1).isNotNull();
+            assertThat(builder1)
+                    .isNotNull()
+                    .isNotSameAs(builder2);
             assertThat(builder2).isNotNull();
-            assertThat(builder1).isNotSameAs(builder2);
         }
 
         @Test
@@ -84,9 +89,11 @@ class StreamingChatClientTest {
             assertThat(builder.getConversationId()).isEqualTo("my-conversation");
         }
 
-        @Test
-        void shouldGenerateUuidWhenConversationIdIsNull() {
-            var builder = streamingChatClient.stream(null);
+        @ParameterizedTest
+        @NullSource
+        @ValueSource(strings = {"", "   "})
+        void shouldGenerateUuidWhenConversationIdIsNullOrBlank(String conversationId) {
+            var builder = streamingChatClient.stream(conversationId);
 
             assertThat(builder.getConversationId())
                     .isNotNull()
@@ -99,24 +106,6 @@ class StreamingChatClientTest {
             var builder2 = streamingChatClient.stream(null);
 
             assertThat(builder1.getConversationId()).isNotEqualTo(builder2.getConversationId());
-        }
-
-        @Test
-        void shouldGenerateUuidWhenConversationIdIsEmpty() {
-            var builder = streamingChatClient.stream("");
-
-            assertThat(builder.getConversationId())
-                    .isNotNull()
-                    .matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
-        }
-
-        @Test
-        void shouldGenerateUuidWhenConversationIdIsWhitespace() {
-            var builder = streamingChatClient.stream("   ");
-
-            assertThat(builder.getConversationId())
-                    .isNotNull()
-                    .matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
         }
     }
 }

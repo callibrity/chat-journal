@@ -19,6 +19,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import reactor.core.publisher.Flux;
 
 import java.time.Duration;
 import java.util.function.Consumer;
@@ -231,52 +232,10 @@ public class StreamingRequestBuilder {
 
         executor.execute(() -> {
             try {
-                // Send initial metadata if handler provided
-                if (onStartHandler != null) {
-                    emitter.send("metadata", onStartHandler.apply(conversationId));
-                }
-
-                // Build the prompt
-                var promptSpec = chatClient.prompt();
-
-                // Add system prompt if provided
-                if (systemPromptProvider != null) {
-                    String systemPrompt = systemPromptProvider.get();
-                    if (systemPrompt != null) {
-                        promptSpec.system(systemPrompt);
-                    }
-                }
-
-                // Add user prompt
-                promptSpec.user(userPrompt);
-
-                // Configure advisors
-                promptSpec.advisors(a -> {
-                    a.param(ChatMemory.CONVERSATION_ID, conversationId);
-                    if (advisorCustomizer != null) {
-                        advisorCustomizer.accept(a);
-                    }
-                });
-
-                // Stream the response
-                var flux = promptSpec.stream().content();
-
-                // Send each chunk
-                for (var chunk : flux.toIterable()) {
-                    if (onChunkHandler != null) {
-                        emitter.send("chunk", onChunkHandler.apply(chunk));
-                    } else {
-                        emitter.send("chunk", chunk);
-                    }
-                }
-
-                // Send completion event if handler provided
-                if (onCompleteHandler != null) {
-                    emitter.complete("done", onCompleteHandler.get());
-                } else {
-                    emitter.complete();
-                }
-
+                sendStartEvent(emitter);
+                var flux = buildAndStreamPrompt(userPrompt);
+                streamChunks(emitter, flux);
+                sendCompletionEvent(emitter);
             } catch (Exception e) {
                 // Emitter will handle error completion internally via its error handlers
                 // No need to explicitly handle here as ChatCompletionEmitter manages this
@@ -284,5 +243,57 @@ public class StreamingRequestBuilder {
         });
 
         return emitter.getEmitter();
+    }
+
+    private void sendStartEvent(ChatCompletionEmitter emitter) {
+        if (onStartHandler != null) {
+            emitter.send("metadata", onStartHandler.apply(conversationId));
+        }
+    }
+
+    private Flux<String> buildAndStreamPrompt(String userPrompt) {
+        var promptSpec = chatClient.prompt();
+
+        applySystemPrompt(promptSpec);
+        promptSpec.user(userPrompt);
+        configureAdvisors(promptSpec);
+
+        return promptSpec.stream().content();
+    }
+
+    private void applySystemPrompt(ChatClient.ChatClientRequestSpec promptSpec) {
+        if (systemPromptProvider != null) {
+            String systemPrompt = systemPromptProvider.get();
+            if (systemPrompt != null) {
+                promptSpec.system(systemPrompt);
+            }
+        }
+    }
+
+    private void configureAdvisors(ChatClient.ChatClientRequestSpec promptSpec) {
+        promptSpec.advisors(a -> {
+            a.param(ChatMemory.CONVERSATION_ID, conversationId);
+            if (advisorCustomizer != null) {
+                advisorCustomizer.accept(a);
+            }
+        });
+    }
+
+    private void streamChunks(ChatCompletionEmitter emitter, Flux<String> flux) {
+        for (var chunk : flux.toIterable()) {
+            if (onChunkHandler != null) {
+                emitter.send("chunk", onChunkHandler.apply(chunk));
+            } else {
+                emitter.send("chunk", chunk);
+            }
+        }
+    }
+
+    private void sendCompletionEvent(ChatCompletionEmitter emitter) {
+        if (onCompleteHandler != null) {
+            emitter.complete("done", onCompleteHandler.get());
+        } else {
+            emitter.complete();
+        }
     }
 }

@@ -18,16 +18,15 @@ package com.callibrity.ai.chatjournal.example.sse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.Answers;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.core.task.SyncTaskExecutor;
 import org.springframework.core.task.TaskExecutor;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 
 import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -98,7 +97,7 @@ class StreamingRequestBuilderTest {
 
         @Test
         void shouldAcceptOnStartHandler() {
-            var result = builder.onStart(convId -> new Metadata(convId));
+            var result = builder.onStart(Metadata::new);
 
             assertThat(result).isSameAs(builder);
         }
@@ -112,7 +111,7 @@ class StreamingRequestBuilderTest {
 
         @Test
         void shouldAcceptOnCompleteHandler() {
-            var result = builder.onComplete(() -> new Done());
+            var result = builder.onComplete(Done::new);
 
             assertThat(result).isSameAs(builder);
         }
@@ -120,9 +119,9 @@ class StreamingRequestBuilderTest {
         @Test
         void shouldChainAllHandlers() {
             var result = builder
-                    .onStart(convId -> new Metadata(convId))
+                    .onStart(Metadata::new)
                     .onChunk(Chunk::new)
-                    .onComplete(() -> new Done());
+                    .onComplete(Done::new);
 
             assertThat(result).isSameAs(builder);
         }
@@ -165,12 +164,160 @@ class StreamingRequestBuilderTest {
             var result = builder
                     .systemPrompt("You are helpful")
                     .timeout(Duration.ofSeconds(30))
-                    .onStart(convId -> new Metadata(convId))
+                    .onStart(Metadata::new)
                     .onChunk(Chunk::new)
-                    .onComplete(() -> new Done())
+                    .onComplete(Done::new)
                     .advisors(a -> a.param("test", "value"));
 
             assertThat(result).isSameAs(builder);
+        }
+    }
+
+    @Nested
+    class Execute {
+
+        @BeforeEach
+        void setUp() {
+            chatClient = mock(ChatClient.class);
+            executor = new SyncTaskExecutor();
+            builder = new StreamingRequestBuilder(chatClient, executor, CONVERSATION_ID);
+        }
+
+        @Test
+        void shouldExecuteAndReturnSseEmitter() {
+            var promptSpec = mockPromptSpecChain();
+
+            var result = builder.execute(USER_PROMPT);
+
+            assertThat(result).isNotNull();
+        }
+
+        @Test
+        void shouldSendStartEventWhenOnStartHandlerProvided() {
+            var promptSpec = mockPromptSpecChain();
+            var startEventReceived = new boolean[]{false};
+
+            builder.onStart(convId -> {
+                startEventReceived[0] = true;
+                return new Metadata(convId);
+            });
+
+            builder.execute(USER_PROMPT);
+
+            assertThat(startEventReceived[0]).isTrue();
+        }
+
+        @Test
+        void shouldNotSendStartEventWhenOnStartHandlerNotProvided() {
+            mockPromptSpecChain();
+
+            var result = builder.execute(USER_PROMPT);
+
+            assertThat(result).isNotNull();
+        }
+
+        @Test
+        void shouldApplyStaticSystemPromptWhenProvided() {
+            mockPromptSpecChain();
+
+            var result = builder.systemPrompt("You are helpful").execute(USER_PROMPT);
+
+            assertThat(result).isNotNull();
+        }
+
+        @Test
+        void shouldApplyDynamicSystemPromptWhenProvided() {
+            var promptSpec = mockPromptSpecChain();
+            var providerCalled = new boolean[]{false};
+
+            builder.systemPrompt(() -> {
+                providerCalled[0] = true;
+                return "Dynamic prompt";
+            }).execute(USER_PROMPT);
+
+            assertThat(providerCalled[0]).isTrue();
+        }
+
+        @Test
+        void shouldHandleNullSystemPromptFromProvider() {
+            mockPromptSpecChain();
+
+            var result = builder.systemPrompt(() -> null).execute(USER_PROMPT);
+
+            assertThat(result).isNotNull();
+        }
+
+        @Test
+        void shouldProcessChunksWithHandler() {
+            var promptSpec = mockPromptSpecChain();
+            var chunkCount = new int[]{0};
+
+            builder.onChunk(chunk -> {
+                chunkCount[0]++;
+                return new Chunk(chunk);
+            });
+
+            builder.execute(USER_PROMPT);
+
+            assertThat(chunkCount[0]).isGreaterThan(0);
+        }
+
+        @Test
+        void shouldProcessChunksWithoutHandler() {
+            mockPromptSpecChain();
+
+            var result = builder.execute(USER_PROMPT);
+
+            assertThat(result).isNotNull();
+        }
+
+        @Test
+        void shouldCallCompleteHandlerWhenProvided() {
+            var promptSpec = mockPromptSpecChain();
+            var completeCalled = new boolean[]{false};
+
+            builder.onComplete(() -> {
+                completeCalled[0] = true;
+                return new Done();
+            });
+
+            builder.execute(USER_PROMPT);
+
+            assertThat(completeCalled[0]).isTrue();
+        }
+
+        @Test
+        void shouldCompleteWithoutHandlerWhenNotProvided() {
+            mockPromptSpecChain();
+
+            var result = builder.execute(USER_PROMPT);
+
+            assertThat(result).isNotNull();
+        }
+
+        @Test
+        void shouldExecuteWithAllHandlers() {
+            mockPromptSpecChain();
+
+            var result = builder
+                    .systemPrompt("Test prompt")
+                    .onStart(Metadata::new)
+                    .onChunk(Chunk::new)
+                    .onComplete(Done::new)
+                    .execute(USER_PROMPT);
+
+            assertThat(result).isNotNull();
+        }
+
+        private ChatClient.ChatClientRequestSpec mockPromptSpecChain() {
+            var promptSpec = mock(ChatClient.ChatClientRequestSpec.class, Answers.RETURNS_SELF);
+            var streamResponseSpec = mock(ChatClient.StreamResponseSpec.class);
+
+            when(chatClient.prompt()).thenReturn(promptSpec);
+            when(promptSpec.stream()).thenReturn(streamResponseSpec);
+            when(streamResponseSpec.content()).thenReturn(Flux.just("Hello", " ", "World"));
+
+            return promptSpec;
         }
     }
 
