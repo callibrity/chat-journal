@@ -17,9 +17,10 @@ package com.callibrity.ai.chatjournal.example.sse;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.core.task.TaskExecutor;
-import org.springframework.util.StringUtils;
 
 import java.util.UUID;
+
+import static java.util.Optional.ofNullable;
 
 /**
  * Wrapper around Spring AI's {@link ChatClient} that simplifies Server-Sent Events (SSE) streaming responses.
@@ -65,7 +66,7 @@ public class StreamingChatClient {
      * Creates a new StreamingChatClient.
      *
      * @param chatClient the Spring AI ChatClient to wrap
-     * @param executor the TaskExecutor for running streaming operations asynchronously
+     * @param executor   the TaskExecutor for running streaming operations asynchronously
      */
     public StreamingChatClient(ChatClient chatClient, TaskExecutor executor) {
         this.chatClient = chatClient;
@@ -79,13 +80,16 @@ public class StreamingChatClient {
      * a new UUID will be automatically generated for this conversation.
      *
      * @param conversationId the conversation ID to associate with this chat request,
-     *                      or {@code null}/empty/whitespace to generate a new one
+     *                       or {@code null}/empty/whitespace to generate a new one
      * @return a builder for configuring the streaming request
      */
     public StreamingRequestBuilder stream(String conversationId) {
-        String actualConversationId = StringUtils.hasText(conversationId)
-                ? conversationId.trim()
-                : UUID.randomUUID().toString();
-        return new StreamingRequestBuilder(chatClient, executor, actualConversationId);
+        return new StreamingRequestBuilder(chatClient, executor, ensureConversationId(conversationId));
+    }
+
+    private static String ensureConversationId(String conversationId) {
+        return ofNullable(conversationId)
+                .filter(str -> !str.isBlank())
+                .orElseGet(() -> UUID.randomUUID().toString());
     }
 }
