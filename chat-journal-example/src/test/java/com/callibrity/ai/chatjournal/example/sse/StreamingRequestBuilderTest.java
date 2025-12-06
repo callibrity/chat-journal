@@ -185,7 +185,7 @@ class StreamingRequestBuilderTest {
 
         @Test
         void shouldExecuteAndReturnSseEmitter() {
-            var promptSpec = mockPromptSpecChain();
+            mockPromptSpecChain();
 
             var result = builder.execute(USER_PROMPT);
 
@@ -194,7 +194,7 @@ class StreamingRequestBuilderTest {
 
         @Test
         void shouldSendStartEventWhenOnStartHandlerProvided() {
-            var promptSpec = mockPromptSpecChain();
+            mockPromptSpecChain();
             var startEventReceived = new boolean[]{false};
 
             builder.onStart(convId -> {
@@ -227,7 +227,7 @@ class StreamingRequestBuilderTest {
 
         @Test
         void shouldApplyDynamicSystemPromptWhenProvided() {
-            var promptSpec = mockPromptSpecChain();
+            mockPromptSpecChain();
             var providerCalled = new boolean[]{false};
 
             builder.systemPrompt(() -> {
@@ -249,7 +249,7 @@ class StreamingRequestBuilderTest {
 
         @Test
         void shouldProcessChunksWithHandler() {
-            var promptSpec = mockPromptSpecChain();
+            mockPromptSpecChain();
             var chunkCount = new int[]{0};
 
             builder.onChunk(chunk -> {
@@ -273,7 +273,7 @@ class StreamingRequestBuilderTest {
 
         @Test
         void shouldCallCompleteHandlerWhenProvided() {
-            var promptSpec = mockPromptSpecChain();
+            mockPromptSpecChain();
             var completeCalled = new boolean[]{false};
 
             builder.onComplete(() -> {

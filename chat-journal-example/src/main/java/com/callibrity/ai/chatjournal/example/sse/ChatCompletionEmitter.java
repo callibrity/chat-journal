@@ -127,9 +127,9 @@ public class ChatCompletionEmitter {
         } catch (IllegalStateException ignored) {
             log.trace("[SSE:{}:{}] completeWithError failed (already closed)",
                     conversationId, connectionId);
-        } catch (Throwable t) {
+        } catch (Exception e) {
             log.warn("[SSE:{}:{}] Unexpected error completing emitter",
-                    conversationId, connectionId, t);
+                    conversationId, connectionId, e);
         }
     }
 
@@ -153,9 +153,9 @@ public class ChatCompletionEmitter {
         } catch (IllegalStateException ignored) {
             log.trace("[SSE:{}:{}] Emitter already closed during complete()",
                     conversationId, connectionId);
-        } catch (Throwable t) {
+        } catch (Exception e) {
             log.warn("[SSE:{}:{}] Unexpected error while completing emitter",
-                    conversationId, connectionId, t);
+                    conversationId, connectionId, e);
         }
     }
 

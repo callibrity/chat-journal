@@ -59,7 +59,8 @@ class ChatConfigurationTest {
 
         var result = config.streamingChatClient(chatClient, taskExecutor);
 
-        assertThat(result).isNotNull();
-        assertThat(result).isInstanceOf(StreamingChatClient.class);
+        assertThat(result)
+                .isNotNull()
+                .isInstanceOf(StreamingChatClient.class);
     }
 }

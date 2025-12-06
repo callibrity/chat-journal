@@ -189,27 +189,12 @@ class ChatCompletionEmitterTest {
             var exceptions = new ArrayList<Exception>();
 
             var sendThread = new Thread(() -> {
-                try {
-                    for (int i = 0; i < 100; i++) {
-                        emitter.send("event", "data" + i);
-                    }
-                } catch (Exception e) {
-                    synchronized (exceptions) {
-                        exceptions.add(e);
-                    }
+                for (int i = 0; i < 100; i++) {
+                    emitter.send("event", "data" + i);
                 }
             });
 
-            var completeThread = new Thread(() -> {
-                try {
-                    Thread.sleep(10); // Let some sends happen first
-                    emitter.complete();
-                } catch (Exception e) {
-                    synchronized (exceptions) {
-                        exceptions.add(e);
-                    }
-                }
-            });
+            var completeThread = new Thread(emitter::complete);
 
             sendThread.start();
             completeThread.start();

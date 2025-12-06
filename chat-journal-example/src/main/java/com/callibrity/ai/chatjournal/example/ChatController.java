@@ -50,7 +50,7 @@ public class ChatController {
         var builder = streamingChatClient.stream(conversationId);
 
         return builder
-                .onStart(convId -> new Metadata(convId))
+                .onStart(Metadata::new)
                 .onChunk(Chunk::new)
                 .onComplete(() -> {
                     ChatMemoryUsage usage = memoryUsageProvider.getMemoryUsage(builder.getConversationId());
