@@ -18,6 +18,8 @@ package com.callibrity.ai.chatjournal.example.sse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Answers;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.core.task.SyncTaskExecutor;
@@ -183,8 +185,14 @@ class StreamingRequestBuilderTest {
             builder = new StreamingRequestBuilder(chatClient, executor, CONVERSATION_ID);
         }
 
-        @Test
-        void shouldExecuteAndReturnSseEmitter() {
+        @ParameterizedTest
+        @ValueSource(strings = {
+                "should execute and return SSE emitter",
+                "should not send start event when handler not provided",
+                "should process chunks without handler",
+                "should complete without handler when not provided"
+        })
+        void shouldExecuteSuccessfully(String scenario) {
             mockPromptSpecChain();
 
             var result = builder.execute(USER_PROMPT);
@@ -205,15 +213,6 @@ class StreamingRequestBuilderTest {
             builder.execute(USER_PROMPT);
 
             assertThat(startEventReceived[0]).isTrue();
-        }
-
-        @Test
-        void shouldNotSendStartEventWhenOnStartHandlerNotProvided() {
-            mockPromptSpecChain();
-
-            var result = builder.execute(USER_PROMPT);
-
-            assertThat(result).isNotNull();
         }
 
         @Test
@@ -263,15 +262,6 @@ class StreamingRequestBuilderTest {
         }
 
         @Test
-        void shouldProcessChunksWithoutHandler() {
-            mockPromptSpecChain();
-
-            var result = builder.execute(USER_PROMPT);
-
-            assertThat(result).isNotNull();
-        }
-
-        @Test
         void shouldCallCompleteHandlerWhenProvided() {
             mockPromptSpecChain();
             var completeCalled = new boolean[]{false};
@@ -284,15 +274,6 @@ class StreamingRequestBuilderTest {
             builder.execute(USER_PROMPT);
 
             assertThat(completeCalled[0]).isTrue();
-        }
-
-        @Test
-        void shouldCompleteWithoutHandlerWhenNotProvided() {
-            mockPromptSpecChain();
-
-            var result = builder.execute(USER_PROMPT);
-
-            assertThat(result).isNotNull();
         }
 
         @Test
