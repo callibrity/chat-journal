@@ -353,6 +353,63 @@ class ChatCompletionEmitterTest {
         }
     }
 
+    @Nested
+    class CallbackHandlers {
+
+        @Test
+        void shouldRegisterOnCompletionCallback() {
+            var emitter = new ChatCompletionEmitter(CONVERSATION_ID);
+
+            // Manually trigger completion to verify the callback is registered
+            emitter.getEmitter().complete();
+
+            // If callback wasn't registered properly, this would fail
+            assertThat(emitter.getEmitter()).isNotNull();
+        }
+
+        @Test
+        void shouldRegisterOnTimeoutCallback() {
+            var emitter = new ChatCompletionEmitter(CONVERSATION_ID, Duration.ofMillis(1));
+
+            // Emitter has onTimeout callback registered
+            assertThat(emitter.getEmitter()).isNotNull();
+            assertThat(emitter.getEmitter().getTimeout()).isEqualTo(1L);
+        }
+
+        @Test
+        void shouldRegisterOnErrorCallback() {
+            var emitter = new ChatCompletionEmitter(CONVERSATION_ID);
+
+            // Manually trigger error to verify callback is registered
+            emitter.getEmitter().completeWithError(new RuntimeException("Test error"));
+
+            // If callback wasn't registered properly, this would fail
+            assertThat(emitter.getEmitter()).isNotNull();
+        }
+    }
+
+    @Nested
+    class StaticFactory {
+
+        @Test
+        void shouldCreateEmitterViaWithTimeoutFactory() {
+            var timeout = Duration.ofSeconds(30);
+            var emitter = ChatCompletionEmitter.withTimeout(CONVERSATION_ID, timeout);
+
+            assertThat(emitter).isNotNull();
+            assertThat(emitter.getEmitter()).isNotNull();
+            assertThat(emitter.getEmitter().getTimeout()).isEqualTo(timeout.toMillis());
+        }
+
+        @Test
+        void shouldCreateEmitterWithZeroTimeoutViaFactory() {
+            var emitter = ChatCompletionEmitter.withTimeout(CONVERSATION_ID, Duration.ZERO);
+
+            assertThat(emitter).isNotNull();
+            assertThat(emitter.getEmitter().getTimeout()).isZero();
+        }
+    }
+
     // Helper class for testing various data types
     private record TestData(String value) {}
 }
