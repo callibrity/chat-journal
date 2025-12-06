@@ -17,6 +17,9 @@ package com.callibrity.ai.chatjournal.example.sse;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.core.task.TaskExecutor;
+import org.springframework.util.StringUtils;
+
+import java.util.UUID;
 
 /**
  * Wrapper around Spring AI's {@link ChatClient} that simplifies Server-Sent Events (SSE) streaming responses.
@@ -72,16 +75,17 @@ public class StreamingChatClient {
     /**
      * Begin building a streaming request for the given conversation.
      *
-     * <p>If the conversationId is {@code null}, a new UUID will be automatically generated
-     * for this conversation.
+     * <p>If the conversationId is {@code null}, empty, or contains only whitespace,
+     * a new UUID will be automatically generated for this conversation.
      *
-     * @param conversationId the conversation ID to associate with this chat request, or {@code null} to generate a new one
+     * @param conversationId the conversation ID to associate with this chat request,
+     *                      or {@code null}/empty/whitespace to generate a new one
      * @return a builder for configuring the streaming request
      */
     public StreamingRequestBuilder stream(String conversationId) {
-        String actualConversationId = conversationId != null
-                ? conversationId
-                : java.util.UUID.randomUUID().toString();
+        String actualConversationId = StringUtils.hasText(conversationId)
+                ? conversationId.trim()
+                : UUID.randomUUID().toString();
         return new StreamingRequestBuilder(chatClient, executor, actualConversationId);
     }
 }

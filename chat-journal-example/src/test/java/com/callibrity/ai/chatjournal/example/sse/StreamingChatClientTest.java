@@ -100,5 +100,23 @@ class StreamingChatClientTest {
 
             assertThat(builder1.getConversationId()).isNotEqualTo(builder2.getConversationId());
         }
+
+        @Test
+        void shouldGenerateUuidWhenConversationIdIsEmpty() {
+            var builder = streamingChatClient.stream("");
+
+            assertThat(builder.getConversationId())
+                    .isNotNull()
+                    .matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+        }
+
+        @Test
+        void shouldGenerateUuidWhenConversationIdIsWhitespace() {
+            var builder = streamingChatClient.stream("   ");
+
+            assertThat(builder.getConversationId())
+                    .isNotNull()
+                    .matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+        }
     }
 }
