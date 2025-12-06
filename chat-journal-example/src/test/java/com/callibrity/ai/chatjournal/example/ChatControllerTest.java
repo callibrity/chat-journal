@@ -15,6 +15,8 @@
  */
 package com.callibrity.ai.chatjournal.example;
 
+import com.callibrity.ai.chatjournal.example.sse.StreamingChatClient;
+import com.callibrity.ai.chatjournal.example.sse.StreamingRequestBuilder;
 import com.callibrity.ai.chatjournal.memory.ChatMemoryUsage;
 import com.callibrity.ai.chatjournal.memory.ChatMemoryUsageProvider;
 import com.callibrity.ai.chatjournal.repository.ChatJournalEntry;
@@ -24,22 +26,15 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.core.task.SyncTaskExecutor;
-import org.springframework.core.task.TaskExecutor;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-import reactor.core.publisher.Flux;
 
 import java.util.List;
-import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -47,19 +42,7 @@ import static org.mockito.Mockito.when;
 class ChatControllerTest {
 
     @Mock
-    private ChatClient chatClient;
-
-    @Mock
-    private ChatClient.ChatClientRequestSpec requestSpec;
-
-    @Mock
-    private ChatClient.ChatClientRequestSpec userSpec;
-
-    @Mock
-    private ChatClient.AdvisorSpec advisorSpec;
-
-    @Mock
-    private ChatClient.StreamResponseSpec streamResponseSpec;
+    private StreamingChatClient streamingChatClient;
 
     @Mock
     private ChatMemoryUsageProvider memoryUsageProvider;
@@ -67,72 +50,42 @@ class ChatControllerTest {
     @Mock
     private ChatJournalEntryRepository entryRepository;
 
-    @Captor
-    private ArgumentCaptor<String> userMessageCaptor;
-
-    @Captor
-    private ArgumentCaptor<Consumer<ChatClient.AdvisorSpec>> advisorConsumerCaptor;
-
-    private final TaskExecutor executor = new SyncTaskExecutor();
-
     private ChatController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new ChatController(chatClient, executor, memoryUsageProvider, entryRepository);
+        controller = new ChatController(streamingChatClient, memoryUsageProvider, entryRepository);
     }
 
     @Nested
     class Stream {
 
-        @BeforeEach
-        void setUpMocks() {
-            when(chatClient.prompt()).thenReturn(requestSpec);
-            when(requestSpec.user(anyString())).thenReturn(userSpec);
-            when(userSpec.advisors(any(Consumer.class))).thenReturn(userSpec);
-            when(userSpec.stream()).thenReturn(streamResponseSpec);
-            when(streamResponseSpec.content()).thenReturn(Flux.just("Response"));
-            when(memoryUsageProvider.getMemoryUsage(anyString()))
-                    .thenReturn(new ChatMemoryUsage(500, 1000));
+        @Test
+        void shouldDelegateToStreamingChatClient() {
+            var mockBuilder = mock(StreamingRequestBuilder.class);
+            when(mockBuilder.onStart(any())).thenReturn(mockBuilder);
+            when(mockBuilder.onChunk(any())).thenReturn(mockBuilder);
+            when(mockBuilder.onComplete(any())).thenReturn(mockBuilder);
+            when(mockBuilder.execute(anyString())).thenReturn(mock(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.class));
+            when(streamingChatClient.stream(anyString())).thenReturn(mockBuilder);
+
+            controller.stream("What is AI?", "conv-123");
+
+            verify(streamingChatClient).stream("conv-123");
         }
 
         @Test
-        void shouldReturnSseEmitter() {
-            SseEmitter emitter = controller.stream("What is AI?", null);
+        void shouldPassNullConversationIdToStreamingChatClient() {
+            var mockBuilder = mock(StreamingRequestBuilder.class);
+            when(mockBuilder.onStart(any())).thenReturn(mockBuilder);
+            when(mockBuilder.onChunk(any())).thenReturn(mockBuilder);
+            when(mockBuilder.onComplete(any())).thenReturn(mockBuilder);
+            when(mockBuilder.execute(anyString())).thenReturn(mock(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.class));
+            when(streamingChatClient.stream(any())).thenReturn(mockBuilder);
 
-            assertThat(emitter).isNotNull();
-        }
-
-        @Test
-        void shouldPassUserQuestionToChatClient() {
             controller.stream("What is AI?", null);
 
-            verify(requestSpec).user(userMessageCaptor.capture());
-            assertThat(userMessageCaptor.getValue()).isEqualTo("What is AI?");
-        }
-
-        @Test
-        void shouldUseProvidedConversationId() {
-            controller.stream("Question", "my-conversation-id");
-
-            verify(userSpec).advisors(advisorConsumerCaptor.capture());
-            advisorConsumerCaptor.getValue().accept(advisorSpec);
-            verify(advisorSpec).param(ChatMemory.CONVERSATION_ID, "my-conversation-id");
-        }
-
-        @Test
-        void shouldGenerateConversationIdWhenNotProvided() {
-            controller.stream("Question", null);
-
-            verify(userSpec).advisors(advisorConsumerCaptor.capture());
-            advisorConsumerCaptor.getValue().accept(advisorSpec);
-
-            ArgumentCaptor<String> conversationIdCaptor = ArgumentCaptor.forClass(String.class);
-            verify(advisorSpec).param(any(), conversationIdCaptor.capture());
-
-            assertThat(conversationIdCaptor.getValue()).matches(
-                    "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
-            );
+            verify(streamingChatClient).stream(null);
         }
     }
 

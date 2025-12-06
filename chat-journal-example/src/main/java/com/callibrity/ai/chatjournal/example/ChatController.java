@@ -15,14 +15,11 @@
  */
 package com.callibrity.ai.chatjournal.example;
 
-import com.callibrity.ai.chatjournal.example.sse.ChatCompletionEmitter;
+import com.callibrity.ai.chatjournal.example.sse.StreamingChatClient;
 import com.callibrity.ai.chatjournal.memory.ChatMemoryUsage;
 import com.callibrity.ai.chatjournal.memory.ChatMemoryUsageProvider;
 import com.callibrity.ai.chatjournal.repository.ChatJournalEntry;
 import com.callibrity.ai.chatjournal.repository.ChatJournalEntryRepository;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.core.task.TaskExecutor;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -30,22 +27,17 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
-import java.util.UUID;
-
-import static java.util.Optional.ofNullable;
 
 @RestController
 public class ChatController {
 
-    private final ChatClient chatClient;
-    private final TaskExecutor executor;
+    private final StreamingChatClient streamingChatClient;
     private final ChatMemoryUsageProvider memoryUsageProvider;
     private final ChatJournalEntryRepository entryRepository;
 
-    public ChatController(ChatClient chatClient, TaskExecutor executor, ChatMemoryUsageProvider memoryUsageProvider,
+    public ChatController(StreamingChatClient streamingChatClient, ChatMemoryUsageProvider memoryUsageProvider,
                           ChatJournalEntryRepository entryRepository) {
-        this.chatClient = chatClient;
-        this.executor = executor;
+        this.streamingChatClient = streamingChatClient;
         this.memoryUsageProvider = memoryUsageProvider;
         this.entryRepository = entryRepository;
     }
@@ -55,26 +47,16 @@ public class ChatController {
             @RequestParam String question,
             @RequestParam(required = false) String conversationId) {
 
-        var actualConversationId = ofNullable(conversationId)
-                .orElseGet(() -> UUID.randomUUID().toString());
+        var builder = streamingChatClient.stream(conversationId);
 
-        var flux = chatClient.prompt()
-                .user(question)
-                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, actualConversationId))
-                .stream()
-                .content();
-        var emitter = new ChatCompletionEmitter(conversationId);
-
-        executor.execute(() -> {
-            emitter.send("metadata", new Metadata(actualConversationId));
-            for (var item : flux.toIterable()) {
-                emitter.send("chunk", new Chunk(item));
-            }
-            ChatMemoryUsage usage = memoryUsageProvider.getMemoryUsage(actualConversationId);
-            emitter.complete("done", new Done(usage.currentTokens(), usage.maxTokens(), usage.percentageUsed()));
-        });
-
-        return emitter.getEmitter();
+        return builder
+                .onStart(convId -> new Metadata(convId))
+                .onChunk(Chunk::new)
+                .onComplete(() -> {
+                    ChatMemoryUsage usage = memoryUsageProvider.getMemoryUsage(builder.getConversationId());
+                    return new Done(usage.currentTokens(), usage.maxTokens(), usage.percentageUsed());
+                })
+                .execute(question);
     }
 
     @GetMapping("/chat/history")
